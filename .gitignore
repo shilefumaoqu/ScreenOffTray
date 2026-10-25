@@ -1,0 +1,15 @@
+bin/
+obj/
+检查/
+checks/
+检查记录/
+打包暂存/
+安装包/
+.vs/
+*.pdb
+*.log
+*.user
+*.suo
+user.config
+运行记录/
+恢复快照/

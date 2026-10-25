@@ -1,0 +1,5 @@
+# Preserve the exact bytes and PowerShell BOMs of the reviewed release inputs.
+* -text
+*.dll binary
+*.cat binary
+*.ico binary
