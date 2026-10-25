@@ -1,0 +1,10 @@
+{
+  "说明": "仅作默认值说明；不覆盖 ApplicationSettingsBase 保存的个人设置。",
+  "TimeoutMinutes": 10,
+  "Language": "zh-CN",
+  "ScreenOffHotkey": "Ctrl+Alt+F10",
+  "StartWithWindows": false,
+  "AutomaticUpdateChecks": true,
+  "UpdateNotes": "启动时自动检查一次；关闭自动检查后仍可手动检查。没有配置更新源时不发起请求，手动检查会提示更新源未配置。更新只提示和提供下载入口，不会自动安装或结束程序。",
+  "DisplaySetup": "首次检查实际显示条件后启用关屏，不预置固定分辨率或缩放。引导显示历史与准备成功记录分别保存；正常启动和后台自检不弹准备窗口，同一异常只提示一次。"
+}

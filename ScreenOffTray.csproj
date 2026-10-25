@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{6B6D77C8-9C47-4D10-9B90-3B7A0C0A8F01}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>ScreenOffTray</RootNamespace>
+    <AssemblyName>ScreenOffTray</AssemblyName>
+    <StartupObject>ScreenOffTray.Program</StartupObject>
+    <ApplicationIcon>图标\ScreenOffTray.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <LangVersion>5</LangVersion>
+    <CodePage>65001</CodePage>
+    <TargetFrameworkMonikerAssemblyAttributesPath>$(MSBuildProjectDirectory)\obj\$(Configuration)\FrameworkAssemblyAttributes.cs</TargetFrameworkMonikerAssemblyAttributesPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <OutputPath>bin\Debug\</OutputPath>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <OutputPath>bin\Release\</OutputPath>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="mscorlib"><Private>false</Private></Reference>
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="TrayApplicationContext.cs" />
+    <Compile Include="HotkeyBinding.cs" />
+    <Compile Include="HotkeyRegistration.cs" />
+    <Compile Include="NativeMethods.cs" />
+    <Compile Include="AutoOffTiming.cs" />
+    <Compile Include="AutoOffStatusText.cs" />
+    <Compile Include="Properties\Settings.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="InstallationDiagnostics.cs" />
+    <Compile Include="SettingsMigration.cs" />
+    <Compile Include="DisplaySetup.cs" />
+    <Compile Include="SetupPromptPolicy.cs" />
+    <Compile Include="UpdateChecker.cs" />
+    <Compile Include="Ui\TrayMenu.cs" />
+    <Compile Include="Ui\SettingsDialog.cs" />
+    <Compile Include="Ui\TimeoutDialog.cs" />
+    <Compile Include="Oled\DisplayBackend.cs" />
+    <Compile Include="Oled\InputGate.cs" />
+    <Compile Include="Oled\TransitionDeadline.cs" />
+    <Compile Include="Oled\Guardian.cs" />
+    <Compile Include="Oled\SessionFlow.cs" />
+    <Compile Include="Oled\SessionSafety.cs" />
+    <Compile Include="Oled\OledSession.cs" />
+    <Compile Include="Oled\RuntimeBridge.cs" />
+    <Compile Include="Oled\ExitLifecycle.cs" />
+    <Compile Include="Oled\RecoveryTermination.cs" />
+    <Compile Include="Oled\RuntimeMaintenance.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Properties\Settings.settings" />
+    <None Include="README.md" />
+    <None Include="App.config" />
+    <None Include="app.manifest" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
