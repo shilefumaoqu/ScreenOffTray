@@ -5,6 +5,10 @@
   "ScreenOffHotkey": "Ctrl+Alt+F10",
   "StartWithWindows": false,
   "AutomaticUpdateChecks": true,
+  "PlaybackLimitEnabled": true,
+  "PlaybackLimitMinutes": 60,
+  "PlaybackWhitelistPaths": [],
+  "PlaybackNotes": "名单按可执行文件完整路径保存，新增/移除即时生效；默认空名单。仅白名单音频播放保护自动关屏；保护结束后重新等待完整空闲时间。上限按最后一次实体输入计算，默认60分钟，可关闭。",
   "UpdateNotes": "启动时自动检查一次；关闭自动检查后仍可手动检查。没有配置更新源时不发起请求，手动检查会提示更新源未配置。更新只提示和提供下载入口，不会自动安装或结束程序。",
   "DisplaySetup": "首次检查实际显示条件后启用关屏，不预置固定分辨率或缩放。引导显示历史与准备成功记录分别保存；正常启动和后台自检不弹准备窗口，同一异常只提示一次。"
 }

@@ -4,6 +4,9 @@
     <Profile Name="(Default)" />
   </Profiles>
   <Settings>
+    <Setting Name="PlaybackLimitEnabled" Type="System.Boolean" Scope="User"><Value Profile="(Default)">True</Value></Setting>
+    <Setting Name="PlaybackLimitMinutes" Type="System.Int32" Scope="User"><Value Profile="(Default)">60</Value></Setting>
+    <Setting Name="PlaybackWhitelistPaths" Type="System.String" Scope="User"><Value Profile="(Default)">[]</Value></Setting>
     <Setting Name="Language" Type="System.String" Scope="User"><Value Profile="(Default)">zh-CN</Value></Setting>
     <Setting Name="ScreenOffHotkey" Type="System.String" Scope="User"><Value Profile="(Default)">Ctrl+Alt+F10</Value></Setting>
     <Setting Name="AutomaticUpdateChecks" Type="System.Boolean" Scope="User"><Value Profile="(Default)">True</Value></Setting>

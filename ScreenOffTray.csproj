@@ -50,6 +50,15 @@
     <Compile Include="NativeMethods.cs" />
     <Compile Include="AutoOffTiming.cs" />
     <Compile Include="AutoOffStatusText.cs" />
+    <Compile Include="Playback\PlaybackContracts.cs" />
+    <Compile Include="Playback\PlaybackProtection.cs" />
+    <Compile Include="Playback\PlaybackSettingsCodec.cs" />
+    <Compile Include="Playback\PlaybackSettingsPersistence.cs" />
+    <Compile Include="Playback\AudioMonitor.cs" />
+    <Compile Include="Playback\AudioSourceNames.cs" />
+    <Compile Include="Playback\MediaPauseFilter.cs" />
+    <Compile Include="Playback\MediaSourceResolver.cs" />
+    <Compile Include="Playback\WinRtMediaStateReader.cs" />
     <Compile Include="Properties\Settings.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="InstallationDiagnostics.cs" />
@@ -59,6 +68,12 @@
     <Compile Include="UpdateChecker.cs" />
     <Compile Include="Ui\TrayMenu.cs" />
     <Compile Include="Ui\SettingsDialog.cs" />
+    <Compile Include="Ui\SettingsDpiContext.cs" />
+    <Compile Include="Ui\FirstRunSetupDialog.cs" />
+    <Compile Include="Ui\PlaybackSettingsPanel.cs" />
+    <Compile Include="Ui\MintControls.cs" />
+    <Compile Include="Ui\AnimatedCatControl.cs" />
+    <Compile Include="Ui\ApplicationIconCache.cs" />
     <Compile Include="Ui\TimeoutDialog.cs" />
     <Compile Include="Oled\DisplayBackend.cs" />
     <Compile Include="Oled\InputGate.cs" />
@@ -73,6 +88,12 @@
     <Compile Include="Oled\RuntimeMaintenance.cs" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Ui\Resources\cat-actions.png">
+      <LogicalName>ScreenOffTray.Ui.Resources.cat-actions.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Ui\Resources\cat-variety.png">
+      <LogicalName>ScreenOffTray.Ui.Resources.cat-variety.png</LogicalName>
+    </EmbeddedResource>
     <None Include="Properties\Settings.settings" />
     <None Include="README.md" />
     <None Include="App.config" />

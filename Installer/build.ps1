@@ -45,6 +45,7 @@ function Copy-SourceFile([string]$Relative) {
 
 [xml]$project = Get-Content -LiteralPath (Join-Path $productRoot 'ScreenOffTray.csproj') -Raw
 foreach ($item in @($project.SelectNodes("//*[local-name()='Compile']"))) { Copy-SourceFile $item.Include }
+foreach ($item in @($project.SelectNodes("//*[local-name()='EmbeddedResource']"))) { Copy-SourceFile $item.Include }
 foreach ($file in @('ScreenOffTray.csproj','App.config','app.manifest','图标\ScreenOffTray.ico')) { Copy-SourceFile $file }
 # The helper project has an explicit Compile list; no test/old EXE folders enter staging.
 $helperProjectPath = Join-Path $productRoot 'Installer\DriverSetup.csproj'
@@ -90,7 +91,7 @@ $manifest = @(Get-ChildItem -LiteralPath $payload -Recurse -File | ForEach-Objec
 [IO.File]::WriteAllText((Join-Path $output '安装内容清单.json'), ($manifest | ConvertTo-Json -Depth 4), $utf8)
 & $iscc ("--define=SourceRoot=" + $payload) ("--output-dir=" + $output) (Join-Path $PSScriptRoot 'ScreenOffTray.iss') 2>&1 | Tee-Object -FilePath (Join-Path $checks 'Inno-Setup.log')
 if ($LASTEXITCODE -ne 0) { throw 'Inno compilation failed.' }
-$setup = Join-Path $output 'ScreenOffTray-0.1.4-Setup-x64.exe'
+$setup = Join-Path $output 'ScreenOffTray-0.1.9-Setup-x64.exe'
 if (!(Test-Path -LiteralPath $setup)) { throw 'Expected setup output is missing.' }
 $extract = Join-Path $checks '实际安装包内容'
 & (Join-Path $unpackerRoot 'innounp.exe') -x -a -y ("-d" + $extract) $setup 2>&1 | Tee-Object -FilePath (Join-Path $checks '安装包解包.log')

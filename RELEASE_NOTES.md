@@ -1,39 +1,20 @@
-# ScreenOffTray v0.1.4 · 预发布 / Pre-release
+# ScreenOffTray v0.1.9 · 预发布 / Pre-release
 
-这是首个 GitHub 预发布，提供 Windows x64 离线安装包和项目源码。
+相对公开的0.1.4，本版加入音频白名单播放保护、单行名单管理、独立薄荷设置窗口、首次显示准备引导及可互动猫猫。
 
-## 本版变化
+- 右键保留小菜单；设置按C稿分为基本设置和播放保护，窄工作区改为单列。
+- 猫猫会伸懒腰、舔爪、歪头、轻拍，点击避免紧邻重复，空闲时偶尔动作；最小化或隐藏后停播。
+- 软件图标读取实际可执行文件。分钟输入、缩放和长内容滚动得到定向修正。
+- 名单内软件播放音频时保护，默认连续无实体输入60分钟后不再阻挡关屏；静音视频不在保证内。
+- 升级前请从托盘正常退出，安装器保留设置。更新源仍留空，不自动下载安装。
+- 驱动及已验收关屏、3秒保护、首次输入消费逻辑未因本轮UI接入修改。
 
-- 自动计时改用已有规则识别的实体键鼠活动，Windows 标记的模拟输入不再重置计时。
-- 应用要求保持亮屏时暂停自动关屏；保护解除后重新计满关闭时间。
-- 托盘显示“应用要求亮屏”或“无法读取亮屏状态”等暂停原因。
-- 沿用既有驱动、显示切换、3 秒保护和第一次输入仅唤醒的规则。手动关屏仍可覆盖自动保护。
+相对0.1.8，安装包5.22 MiB，展开产品文件3.35 MiB；体积增长来自内嵌猫动作素材。
 
-下载 `ScreenOffTray-0.1.4-Setup-x64.exe`。需要 Windows 10 22H2 / Windows 11 x64、.NET Framework 4.8 和一个实体显示器。升级前正常退出旧版，现有设置保留。Windows 管理员及驱动发布者提示由用户操作；安装器不自动重启。
+定向原生UI和动画检查、专门代码审查、干净构建及最终解包核验已执行。可见设置关闭曾偶发超时，后续旧二进制及当前源码复验正常，**根因仍未定位，不能宣称已消除**。本版未做干净系统安装或长期运行验证；未重跑已验收关屏矩阵。实体多屏、远程虚拟屏准备及混合显卡自动独显直连仍有限制。详见[验证说明](docs/版本验证.md)。
 
-已完成定向隔离测试、专门代码审查、11 项安装载荷核验，以及单台电脑的普通权限升级启动。没有重复已通过的人工关屏矩阵；这些结果不代表全部硬件或长期运行兼容性。干净系统首装、虚拟屏对独显直连自动切换的影响尚未完整验证。
+Compared with public 0.1.4, this pre-release adds audio allowlist playback protection, compact list management, a separate mint Settings window, first-run display preparation and an interactive cat. C-layout columns stack on narrow workspaces. The cat varies click responses and occasional idle actions; hidden/minimized windows stop animation.
 
-某些非视频应用也会保留亮屏请求，此时自动关屏仍会暂停。快捷键冲突反馈仍有已知盲区，可更换组合键或使用托盘立即关屏。本版更新源继续留空，不自动安装更新。主程序及安装器未进行应用代码签名，驱动保持上游签名。
+Exit the old version normally before upgrading; settings are retained. The update source is still blank. The UI integration does not change the driver or accepted display/input decisions. The installer is 5.22 MiB and its product payload is 3.35 MiB.
 
-安装包：3,068,863 字节。SHA-256：
-
-```
-ef46f699f35a7c1bb669b03efd8568c7b4a81d2c3ff84cf875156fb5c4392039
-```
-
-## English
-
-The first GitHub pre-release provides a Windows x64 offline installer and source code.
-
-- Automatic idle timing now uses the existing physical-input classification. Windows-marked injected input does not reset it.
-- Display-required requests pause automatic off. A full timeout restarts when the protection ends.
-- The tray explains display-request and unreadable-state pauses.
-- Existing driver, display switching, 3-second guard and wake-only first input are retained. Manual off can override automatic protection.
-
-Download `ScreenOffTray-0.1.4-Setup-x64.exe`. Requires Windows 10 22H2 / Windows 11 x64, .NET Framework 4.8 and one physical display. Exit the previous version normally before upgrading; settings are retained. Complete Windows prompts yourself. Setup never restarts Windows automatically.
-
-Targeted isolated tests, dedicated code review, verification of all 11 application payload files and a standard-user upgrade/startup check on one computer were completed. The previously accepted physical display-off matrix was not repeated. Clean-system installation, full hardware coverage, automatic discrete-GPU display switching and long-term operation remain unverified.
-
-Non-video apps can also retain display requests and pause automatic off. Shortcut-conflict feedback has known blind spots; try another combination or the tray action. The update source remains blank, with no automatic installation. Application and installer binaries have no application code signature; the driver retains its upstream signature.
-
-Installer size and SHA-256 are listed above and in `SHA256SUMS.txt`.
+Targeted UI/animation checks, dedicated code review, clean build and extracted-package verification were completed. A visible Settings close probe previously timed out; subsequent checks passed, but the cause remains unknown. Clean-system installation, long-term stability, physical DPI switching and all hardware configurations are not verified. This remains a pre-release.
