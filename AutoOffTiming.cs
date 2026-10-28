@@ -2,13 +2,25 @@ using System;
 
 namespace ScreenOffTray
 {
-    internal enum AutoOffPauseReason { None, UserPause, DisplayRequired, StateUnknown }
+    internal enum AutoOffPauseReason { None, UserPause, DisplayRequired, StateUnknown, Playback, AudioUnknown, PlaybackSettingsUnknown }
+
+    internal struct PlaybackProtectionState
+    {
+        internal AutoOffPauseReason PauseReason { get; private set; }
+        internal bool LimitReached { get; private set; }
+        internal string SourceName { get; private set; }
+        internal bool Blocked { get { return PauseReason != AutoOffPauseReason.None; } }
+        internal PlaybackProtectionState(AutoOffPauseReason reason, bool limitReached, string sourceName) : this()
+        { PauseReason = reason; LimitReached = limitReached; SourceName = sourceName; }
+    }
 
     internal struct AutoOffTimingResult
     {
         internal uint IdleMilliseconds { get; private set; }
         internal bool Blocked { get { return PauseReason != AutoOffPauseReason.None; } }
         internal AutoOffPauseReason PauseReason { get; private set; }
+        internal bool PlaybackLimitReached { get; private set; }
+        internal string SourceName { get; private set; }
 
         internal AutoOffTimingResult(uint idleMilliseconds, AutoOffPauseReason pauseReason)
             : this()
@@ -16,6 +28,10 @@ namespace ScreenOffTray
             IdleMilliseconds = idleMilliseconds;
             PauseReason = pauseReason;
         }
+
+        internal AutoOffTimingResult(uint idleMilliseconds, PlaybackProtectionState state)
+            : this(idleMilliseconds, state.PauseReason)
+        { PlaybackLimitReached = state.LimitReached; SourceName = state.SourceName; }
     }
 
     // Caller-serialized, normally on the UI thread. No timers, locks or native calls.
@@ -90,6 +106,22 @@ namespace ScreenOffTray
         internal void ResetCountdown()
         {
             countdownEpoch = clock.Read();
+        }
+
+        internal AutoOffTimingResult EvaluatePlayback(uint physicalIdle, PlaybackProtectionState state)
+        {
+            long now = clock.Read();
+            if (state.Blocked) {
+                if (!wasBlocked) countdownEpoch = now;
+                wasBlocked = true;
+                return new AutoOffTimingResult(0, state);
+            }
+            // A playback cap ends protection at physical H, without granting
+            // another full N. Normal pause/playback/unknown release grants N.
+            if (wasBlocked && !state.LimitReached) countdownEpoch = now;
+            wasBlocked = false;
+            uint elapsed = state.LimitReached ? physicalIdle : AutoOffMonotonicClock.Elapsed(now, countdownEpoch);
+            return new AutoOffTimingResult(Math.Min(physicalIdle, elapsed), state);
         }
 
         // displayRequired is already classified by the source adapter. System/

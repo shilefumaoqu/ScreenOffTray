@@ -68,17 +68,17 @@ namespace ScreenOffTray.Ui
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
         {
             e.TextColor = e.Item.Name == "status" || !e.Item.Enabled
-                ? Color.FromArgb(100, 112, 128)
-                : Color.FromArgb(36, 48, 62);
+                ? Color.FromArgb(85, 105, 100)
+                : Color.FromArgb(23, 41, 39);
             base.OnRenderItemText(e);
         }
     }
 
     internal sealed class ReadableMenuColorTable : ProfessionalColorTable
     {
-        private static readonly Color Background = Color.White;
-        private static readonly Color Selected = Color.FromArgb(233, 242, 251);
-        private static readonly Color Border = Color.FromArgb(221, 227, 234);
+        private static readonly Color Background = Color.FromArgb(253, 255, 253);
+        private static readonly Color Selected = Color.FromArgb(233, 247, 242);
+        private static readonly Color Border = Color.FromArgb(185, 217, 208);
 
         internal ReadableMenuColorTable() { UseSystemColors = false; }
         public override Color ToolStripDropDownBackground { get { return Background; } }

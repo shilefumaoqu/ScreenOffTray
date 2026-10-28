@@ -10,6 +10,9 @@ namespace ScreenOffTray
     {
         internal bool IntroShown { get; private set; }
         internal string LastNoticeKey { get; private set; }
+        // A persisted notice is not proof that the user saw this launch fail.
+        // Wait for the first settled, presentable result before consuming this.
+        private bool firstCheckPending = true;
 
         internal SetupPromptPolicy(bool introShown, string lastNoticeKey, bool previouslyPrepared)
         {
@@ -20,11 +23,15 @@ namespace ScreenOffTray
         internal SetupNotice Observe(bool settled, bool ready, bool busy, string attentionKey)
         {
             if (!settled || busy) return SetupNotice.None;
-            if (ready) { IntroShown = true; LastNoticeKey = ""; return SetupNotice.None; }
+            if (ready) { firstCheckPending = false; IntroShown = true; LastNoticeKey = ""; return SetupNotice.None; }
             string key = attentionKey ?? "";
             if (!IntroShown) {
-                IntroShown = true; LastNoticeKey = key;
+                firstCheckPending = false; IntroShown = true; LastNoticeKey = key;
                 return SetupNotice.Introduction;
+            }
+            if (firstCheckPending && !String.IsNullOrEmpty(key)) {
+                firstCheckPending = false; LastNoticeKey = key;
+                return SetupNotice.Attention;
             }
             if (String.IsNullOrEmpty(key) || String.Equals(key, LastNoticeKey, StringComparison.Ordinal)) return SetupNotice.None;
             LastNoticeKey = key;
@@ -33,8 +40,15 @@ namespace ScreenOffTray
 
         internal void MarkIntroductionShown() { IntroShown = true; }
 
+        // Closing the initial check means "later", including when its read-only
+        // result has not arrived yet. This only dismisses presentation, never
+        // marks the display profile ready. Verified readiness ends the episode.
+        internal void DeferPendingCheck()
+        { AcknowledgeVisibleState(false, "display-setup-required-v1"); }
+
         internal void AcknowledgeVisibleState(bool ready, string attentionKey)
         {
+            firstCheckPending = false;
             IntroShown = true;
             LastNoticeKey = ready ? "" : (attentionKey ?? "");
         }

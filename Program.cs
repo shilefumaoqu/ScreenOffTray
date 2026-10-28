@@ -8,10 +8,12 @@ namespace ScreenOffTray
     {
         internal const string MutexName = @"Local\ScreenOffTray";
 
-        internal enum EntryMode { Tray, SupportCheck, SelfTest, Watchdog, Recover, InstallationCheck, Invalid }
+        internal enum EntryMode { Tray, Setup, SupportCheck, SelfTest, Watchdog, Recover, InstallationCheck, Invalid }
         internal static EntryMode SelectMode(string[] args)
         {
             if (args == null || args.Length == 0) return EntryMode.Tray;
+            if (args.Length == 1 && String.Equals(args[0], "--setup", StringComparison.OrdinalIgnoreCase))
+                return EntryMode.Setup;
             if ((args.Length == 2 || args.Length == 3) && String.Equals(args[0], "--installation-check", StringComparison.OrdinalIgnoreCase))
                 return EntryMode.InstallationCheck;
             if (String.Equals(args[0], "--watchdog", StringComparison.OrdinalIgnoreCase))
@@ -77,7 +79,7 @@ namespace ScreenOffTray
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new TrayApplicationContext());
+                Application.Run(new TrayApplicationContext(mode == EntryMode.Setup));
             }
         }
 

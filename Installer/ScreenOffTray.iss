@@ -6,9 +6,9 @@
 [Setup]
 AppId={{F8732557-3873-4D44-ABF7-D267AF16E126}
 AppName=ScreenOffTray
-AppVersion=0.1.4
-AppVerName=ScreenOffTray 0.1.4
-VersionInfoVersion=0.1.4.0
+AppVersion=0.1.9
+AppVerName=ScreenOffTray 0.1.9
+VersionInfoVersion=0.1.9.0
 DefaultDirName={autopf64}\ScreenOffTray
 DefaultGroupName=ScreenOffTray
 DisableProgramGroupPage=yes
@@ -24,7 +24,7 @@ RestartIfNeededByRun=no
 AlwaysRestart=no
 AllowCancelDuringInstall=no
 OutputDir=..\安装包
-OutputBaseFilename=ScreenOffTray-0.1.4-Setup-x64
+OutputBaseFilename=ScreenOffTray-0.1.9-Setup-x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -102,6 +102,11 @@ procedure CurPageChanged(CurPageID: Integer);
 begin
   if (CurPageID = wpFinished) and (HelperCode = 3010) then
     WizardForm.FinishedLabel.Caption := '驱动需要您手动重启。安装程序不会自动重启。重启后重新运行安装程序完成可用性检查。';
+  if (CurPageID = wpFinished) and DriverReady then begin
+    WizardForm.FinishedLabel.Caption := '程序文件已安装。接下来将检查显示条件，并引导您一键完成关屏配置。' + #13#10 + #13#10 +
+      '点击“完成并配置”继续；关屏是否可用，以随后配置窗口的检查结果为准。';
+    WizardForm.NextButton.Caption := '完成并配置';
+  end;
 end;
 
 procedure FinishLaunch;
@@ -109,9 +114,9 @@ var
   Code: Integer;
 begin
   if DriverReady and (not WizardSilent) then begin
-    if not ExecAsOriginalUser(ExpandConstant('{app}\ScreenOffTray.exe'), '',
+    if not ExecAsOriginalUser(ExpandConstant('{app}\ScreenOffTray.exe'), '--setup',
       ExpandConstant('{app}'), SW_SHOWNORMAL, ewNoWait, Code) then
-      MsgBox('安装完成，但无法以原用户启动程序。请从开始菜单手动打开 ScreenOffTray。', mbInformation, MB_OK);
+      MsgBox('安装文件已复制，但 ScreenOffTray 未能启动，关屏尚未启用。请从开始菜单手动打开 ScreenOffTray；若仍无法启动，请保留安装日志后检查错误，不要重复安装其他显示驱动。', mbError, MB_OK);
   end;
 end;
 

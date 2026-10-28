@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using ScreenOffTray;
+using ScreenOffTray.Playback;
 
 namespace OledPrototype
 {
@@ -50,6 +51,7 @@ namespace OledPrototype
         private long transitionTime;
         private bool automaticRequest;
         private readonly Func<bool> displayReady;
+        private readonly Func<PlaybackProtectionState> automaticProtection;
         internal event Action Changed;
         internal event Action<string> Problem;
         internal event Action ExitReady;
@@ -84,11 +86,13 @@ namespace OledPrototype
 
         internal OledSession(Func<bool> readiness) : this(readiness, HotkeyBinding.Default) { }
 
-        internal OledSession(Func<bool> readiness, HotkeyBinding binding)
+        internal OledSession(Func<bool> readiness, HotkeyBinding binding,
+            Func<PlaybackProtectionState> automaticProtection = null)
         {
             if (readiness == null) throw new ArgumentNullException("readiness");
             if (binding == null) throw new ArgumentNullException("binding");
             displayReady = readiness;
+            this.automaticProtection = automaticProtection;
             physicalActivity = new PhysicalActivityClock(delegate { return clock.ElapsedMilliseconds; });
             Visible = false;
             IntPtr window = Handle;
@@ -150,10 +154,9 @@ namespace OledPrototype
             if (!displayReady()) return false;
             bool displayRequired = false;
             if (automatic) {
-                uint state;
-                bool stateKnown = ScreenOffTray.NativeMethods.TryGetSystemExecutionState(out state);
-                displayRequired = !stateKnown || (state & ScreenOffTray.NativeMethods.ES_DISPLAY_REQUIRED) != 0;
-                if (displayRequired) NotifyAutomaticProtection(stateKnown ? AutoOffPauseReason.DisplayRequired : AutoOffPauseReason.StateUnknown);
+                PlaybackProtectionState protection = PlaybackProtection.Read(automaticProtection);
+                displayRequired = protection.Blocked;
+                if (displayRequired) NotifyAutomaticProtection(protection.PauseReason);
             }
             if (!flow.TryBegin(Supported && inputReady && !rescue, displayRequired, automatic)) return false;
             automaticRequest = automatic;
@@ -232,14 +235,14 @@ namespace OledPrototype
                 recoverySnapshot = snapshot;
                 ownedRecoverySnapshot = snapshotOwner;
                 recoveryReaders = readers; guardianReader = reader;
-                // Recheck automatic requests before installing our own DISPLAY_REQUIRED hold.
+                // Recheck cached audio/physical idle before installing our own hold.
                 // Manual menu/hotkey requests retain the old explicit user override.
                 if (automaticRequest) {
-                    uint state;
-                    bool stateKnown = ScreenOffTray.NativeMethods.TryGetSystemExecutionState(out state);
-                    if (!stateKnown || (state & ScreenOffTray.NativeMethods.ES_DISPLAY_REQUIRED) != 0) {
-                        NotifyAutomaticProtection(stateKnown ? AutoOffPauseReason.DisplayRequired : AutoOffPauseReason.StateUnknown);
-                        throw new InvalidOperationException("有应用请求保持显示开启，或无法核实该状态，已取消自动关屏。");
+                    PlaybackProtectionState protection = PlaybackProtection.Read(automaticProtection);
+                    if (protection.Blocked) {
+                        NotifyAutomaticProtection(protection.PauseReason);
+                        throw new InvalidOperationException(AutoOffStatusText.Format(protection.PauseReason, 0, false) +
+                            "，已取消自动关屏。 / " + AutoOffStatusText.Format(protection.PauseReason, 0, true) + "; automatic display off cancelled.");
                     }
                 }
                 if (!flow.BeginSwitch()) throw new InvalidOperationException("关屏准备已取消。");

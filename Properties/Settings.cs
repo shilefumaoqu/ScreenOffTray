@@ -29,6 +29,15 @@ namespace ScreenOffTray.Properties
         [UserScopedSetting, DefaultSettingValue("True")]
         public bool AutomaticUpdateChecks { get { return (bool)this["AutomaticUpdateChecks"]; } set { this["AutomaticUpdateChecks"] = value; } }
 
+        [UserScopedSetting, DefaultSettingValue("True")]
+        public bool PlaybackLimitEnabled { get { return (bool)this["PlaybackLimitEnabled"]; } set { this["PlaybackLimitEnabled"] = value; } }
+
+        [UserScopedSetting, DefaultSettingValue("60")]
+        public int PlaybackLimitMinutes { get { return (int)this["PlaybackLimitMinutes"]; } set { this["PlaybackLimitMinutes"] = value; } }
+
+        [UserScopedSetting, DefaultSettingValue("[]")]
+        public string PlaybackWhitelistPaths { get { return (string)this["PlaybackWhitelistPaths"]; } set { this["PlaybackWhitelistPaths"] = value; } }
+
         [UserScopedSetting, DefaultSettingValue("False")]
         public bool MigrationComplete { get { return (bool)this["MigrationComplete"]; } set { this["MigrationComplete"] = value; } }
 
