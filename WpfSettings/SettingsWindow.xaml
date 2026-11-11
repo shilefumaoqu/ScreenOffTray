@@ -16,33 +16,12 @@
     </ResourceDictionary>
   </Window.Resources>
 
-  <Grid x:Name="Stage">
-    <Grid.Background>
-      <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#E8EDF3" Offset="0"/>
-        <GradientStop Color="#DDE5ED" Offset="0.52"/>
-        <GradientStop Color="#CDD8E3" Offset="1"/>
-      </LinearGradientBrush>
-    </Grid.Background>
-    <Canvas x:Name="GeometryLayer" ClipToBounds="True">
-      <Ellipse Width="620" Height="620" Canvas.Left="-230" Canvas.Top="-260" Fill="#F0785D"/>
-      <Rectangle Width="520" Height="980" Canvas.Left="800" Canvas.Top="-90" Fill="#405AD4" RenderTransformOrigin="0.5,0.5">
-        <Rectangle.RenderTransform><RotateTransform Angle="15"/></Rectangle.RenderTransform>
-      </Rectangle>
-      <Path Fill="#268B73" Data="M -110 650 C 70 780 260 640 430 670 C 610 700 700 850 710 930 L -110 930 Z"/>
-      <Ellipse Width="390" Height="390" Canvas.Left="870" Canvas.Top="560" Fill="#EDBF45"/>
-      <Rectangle Width="55" Height="900" Canvas.Left="250" Canvas.Top="-50" Fill="#24262C" Opacity="0.82"/>
-      <Rectangle Width="19" Height="900" Canvas.Left="265" Canvas.Top="-50" Fill="#E9E6DE" Opacity="0.8"/>
-    </Canvas>
-
-    <Border x:Name="Shell" Margin="24" CornerRadius="20" BorderBrush="#24000000" BorderThickness="1" ClipToBounds="True">
-      <Border.Effect>
-        <DropShadowEffect BlurRadius="45" ShadowDepth="17" Direction="270" Opacity="0.224" Color="#000000"/>
-      </Border.Effect>
+  <Grid x:Name="Stage" Background="Transparent">
+    <Border x:Name="Shell" Margin="0" CornerRadius="18" BorderBrush="#24000000" BorderThickness="1" ClipToBounds="True">
       <Border.Background>
         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-          <GradientStop Color="#EAF6F7F9" Offset="0"/>
-          <GradientStop Color="#E8EDF1F5" Offset="1"/>
+          <GradientStop Color="#FFF6F7F9" Offset="0"/>
+          <GradientStop Color="#FFEDF1F5" Offset="1"/>
         </LinearGradientBrush>
       </Border.Background>
       <Grid>
@@ -51,7 +30,7 @@
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <Border x:Name="SidebarSurface" Grid.Column="0" Background="#16808080" BorderBrush="{DynamicResource Stroke}" BorderThickness="0,0,1,0">
+        <Border x:Name="SidebarSurface" Grid.Column="0" Background="#FFEDF0F3" BorderBrush="{DynamicResource Stroke}" BorderThickness="0,0,1,0">
           <Grid Margin="12,23,12,20">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto"/>
@@ -335,7 +314,7 @@
                   <Image Source="Assets/app-icon.png" Width="82" Height="82" Stretch="Uniform"/>
                   <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="ScreenOffTray" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource Text1}"/>
-                    <TextBlock Text="版本 0.2.0 · Windows x64" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
+                    <TextBlock Text="版本 0.2.1 · Windows x64" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
                     <TextBlock Text="只关闭显示器，后台程序和任务继续运行。" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
                     <TextBlock x:Name="UpdateStatusText" Visibility="Collapsed" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Accent}" Margin="0,6,0,0"/>
                   </StackPanel>
@@ -362,7 +341,7 @@
                     </StackPanel>
                     <Border HorizontalAlignment="Right" Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="10" Padding="2">
                       <StackPanel Orientation="Horizontal">
-                        <RadioButton x:Name="GeometryChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="几何" IsChecked="True" Tag="geometry" Click="OnBackgroundChoice"/>
+                        <RadioButton x:Name="GeometryChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="浅色" IsChecked="True" Tag="geometry" Click="OnBackgroundChoice"/>
                         <RadioButton x:Name="WarmChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="暖白" Tag="warm" Click="OnBackgroundChoice"/>
                         <RadioButton x:Name="BlackChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="黑色" Tag="black" Click="OnBackgroundChoice"/>
                       </StackPanel>
@@ -386,7 +365,7 @@
             <TextBlock x:Name="ErrorText" FontSize="12" Foreground="{DynamicResource Danger}" TextWrapping="Wrap"/>
           </Border>
 
-          <Border x:Name="FooterBar" Grid.Row="3" BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Background="#EAF4F5F7">
+          <Border x:Name="FooterBar" Grid.Row="3" BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Background="#FFF4F5F7">
             <Grid Margin="24,0,16,0">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <TextBlock x:Name="FooterHint" Text="更改将在保存后生效" FontSize="11" Foreground="{DynamicResource Text3}" VerticalAlignment="Center"/>

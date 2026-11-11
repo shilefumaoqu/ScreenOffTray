@@ -1,3 +1,11 @@
+# ScreenOffTray 0.2.1
+
+设置界面保留 Pane 风格的三页布局，移除误照搬的橙蓝绿黄几何壁纸，也删除窗口外围的演示底图、外边距和投影；只保留磨砂玻璃窗口本体与圆角透明边。顶层窗口、侧栏和页脚改用不透明雾面材质，消除 WPF 透明窗口在部分显卡上的内容重影，卡片仍保留窗口内部的轻微层次。外观选项调整为浅色、暖白、黑色，默认浅色。安装向导同步采用 Inno Setup 7.1.0 的现代动态向导、浅/深色雾面背景、玻璃卡片和双层月亮标识，并保留系统原生高 DPI、键盘及升级核验流程。显示准备、关屏、输入恢复、播放保护、白名单、快捷键、语言和开机启动逻辑未改。`v0.2.0`、`v0.1.9` 与历史安装包保持独立。
+
+Settings keeps the three-page Pane-inspired layout while removing the sampled orange, blue, green and yellow geometry wallpaper. It also removes the display-only backdrop, outer margin and shadow, leaving only the rounded frosted-glass window itself. Opaque misted surfaces are used for the top-level window, sidebar and footer to eliminate transparent-window ghosting on affected GPUs while cards keep their internal depth. Its appearances are now Light, Warm white and Black, with Light as the default. Setup uses Inno Setup 7.1.0's modern dynamic wizard with matching light and dark misted backgrounds, glass cards and the layered-moon mark while retaining native high-DPI, keyboard and upgrade-verification behavior. Display preparation, display-off, input recovery, playback protection, allowlist, hotkey, language and startup logic are unchanged. `v0.2.0`, `v0.1.9` and older releases remain independent.
+
+---
+
 # ScreenOffTray 0.2.0
 
 设置界面迁移为独立的 WPF 进程，采用 Pane 风格的三页布局与几何、暖白、黑色三种外观，默认几何。保留原有显示准备、关屏、输入恢复、播放保护、白名单、快捷键、语言和开机启动流程；设置主题随其他设置一起持久化。旧版 `v0.1.9` 与历史安装包保持独立。
