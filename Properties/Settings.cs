@@ -55,5 +55,12 @@ namespace ScreenOffTray.Properties
 
         [UserScopedSetting, DefaultSettingValue("")]
         public string SetupLastNoticeKey { get { return (string)this["SetupLastNoticeKey"]; } set { this["SetupLastNoticeKey"] = value; } }
+
+        [UserScopedSetting, DefaultSettingValue("geometry")]
+        public string InterfaceTheme
+        {
+            get { return (string)this["InterfaceTheme"] ?? "geometry"; }
+            set { this["InterfaceTheme"] = value; }
+        }
     }
 }

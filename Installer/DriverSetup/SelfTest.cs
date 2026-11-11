@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Web.Script.Serialization;
@@ -22,6 +22,23 @@ namespace ScreenOffTray.DriverSetup
         { bool failed = false; try { work(); } catch (InvalidOperationException) { failed = true; } Assert(failed, name); }
         internal static void Run()
         {
+            Assert(Program.IsProductProcess(@"C:\Fixture",@"C:\Fixture\ScreenOffTray.exe"),"core process identity");
+            Assert(Program.IsProductProcess(@"C:\Fixture",@"c:\fixture\ScreenOffTray.Settings.exe"),"settings process identity");
+            Assert(!Program.IsProductProcess(@"C:\Fixture",@"C:\Other\ScreenOffTray.Settings.exe"),"other installation process is not ours");
+            Program.VerifyExisting(new List<Device>{Good()},null); Assert(true,"verify unowned without receipt");
+            Reject(delegate { Program.VerifyExisting(new List<Device>(),null); },"verify missing");
+            Reject(delegate { Program.VerifyExisting(new List<Device>{Good(),Good()},null); },"verify duplicates");
+            var reused=new Receipt{InstanceId=Good().InstanceId,Phase="reused"};
+            Program.VerifyExisting(new List<Device>{Good()},reused); Assert(true,"verify reused");
+            reused.NeedsReboot=true; Reject(delegate { Program.VerifyExisting(new List<Device>{Good()},reused); },"verify reboot");
+            reused.NeedsReboot=false; reused.Phase="failed"; Reject(delegate { Program.VerifyExisting(new List<Device>{Good()},reused); },"verify failed");
+            reused.Phase="reused"; reused.InstanceId="other"; Reject(delegate { Program.VerifyExisting(new List<Device>{Good()},reused); },"verify receipt identity");
+            var pendingDevice=Good(); var pending=new Receipt{Owned=true,Token=Guid.NewGuid().ToString("N"),InstanceId=pendingDevice.InstanceId,Phase="reboot-pending",NeedsReboot=true};
+            pending.Marker="ScreenOffTray:"+pending.Token; pendingDevice.Marker=pending.Marker;
+            Program.VerifyFirstInstallPending(new List<Device>{pendingDevice},pending); Assert(true,"explicit first install continuation");
+            Reject(delegate { Program.VerifyExisting(new List<Device>{pendingDevice},pending); },"normal upgrade cannot resume");
+            pending.Owned=false; Reject(delegate { Program.VerifyFirstInstallPending(new List<Device>{pendingDevice},pending); },"cannot resume reused device");
+            pending.Owned=true; pending.Phase="installed"; Reject(delegate { Program.VerifyFirstInstallPending(new List<Device>{pendingDevice},pending); },"cannot resume completed device");
             Assert(Policy.Exact(new string[] { @"ROOT\MTTVDD" }), "case-insensitive exact root ID");
             Assert(Policy.Exact(new string[] { "MttVDD" }), "alternate exact ID");
             Assert(!Policy.Exact(new string[] { @"ROOT\MttVDD2", @"ROOT\tdIdd", @"ROOT\GameViewerIddDriver" }), "UU/ToDesk/prefix excluded");

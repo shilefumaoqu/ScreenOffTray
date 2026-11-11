@@ -1,3 +1,37 @@
+# ScreenOffTray 0.2.0
+
+设置界面迁移为独立的 WPF 进程，采用 Pane 风格的三页布局与几何、暖白、黑色三种外观，默认几何。保留原有显示准备、关屏、输入恢复、播放保护、白名单、快捷键、语言和开机启动流程；设置主题随其他设置一起持久化。旧版 `v0.1.9` 与历史安装包保持独立。
+
+Settings now runs in a separate WPF process with three Pane-styled pages and Geometry, Warm white and Black appearances. Existing display preparation, display-off, input recovery, playback protection, allowlist, hotkey, language and startup behavior is retained. The selected appearance is saved with the other settings; older releases remain available.
+
+---
+
+# 0.1.9.13 本地候选 / Local candidate
+
+每次“一键准备”重新识别当前屏幕，仅对已核实的独立 MttVDD 按需匹配缩放；已一致不重复写入。调整完成后再开始原有只读稳定验证，失败沿用原布局恢复责任。设置窗口固定 7:5，常规最小 980×700 逻辑像素，屏幕不足时收紧；保留薄荷色和静态猫。驱动、实体输入/关屏/恢复决策及设置字段不变，无新增运行依赖。验证与交付记录见 `docs/0.1.9.13-接入与交付.md`；本地候选不等于已安装或公开发布。
+
+Every explicit preparation rechecks current displays and matches only the verified independent MttVDD scale when needed. Matching values are not rewritten. Adjustment finishes before the existing read-only settling check; failures retain original-layout recovery ownership. Settings keeps a 7:5 client ratio, normally at least 980×700 logical pixels, bounded by the monitor work area. Mint colors and static cats remain. Driver, input/display/recovery rules and setting fields are unchanged, with no new runtime dependency. This is a local candidate, not an installed or public release.
+
+# 0.1.9.10 本地候选 / Local candidate
+
+音频端点只初始化枚举一次，后续沿用通知更新会话列表；读取周期和播放保护行为不变。升级新增只读驱动核验，保留现有设备与设置。本版已完成两小时隔离观察、专门审查与安装包解包核验；20 MB 目标未达，显示查询未全程通过，实际升级仍未执行；不代表已发布或已安装。
+
+Audio sessions are initialized once and maintained through notifications. Polling and playback decisions are preserved. Application upgrades verify existing drivers without reinstalling them. The isolated resource run, code review and package extraction are complete; the 20 MB target was not met and display queries did not all succeed. This is not a public release or installed acceptance result.
+
+# ScreenOffTray 0.1.9.5 · 本地候选 / Local candidate
+
+设置窗口按确认参考图采用薄荷渐变头部、静态小猫、睡眠小猫与书本台灯场景、等高圆角卡片、分组图标和页脚花纹。插画从参考图裁成透明资源，所有控件仍可操作。保留现有双栏、窄窗堆叠、固定页脚、播放保护、快捷键和全部设置项；状态“检查”在就绪后仍可使用。驱动、播放判断、显示准备和关屏/输入决策均未改变。
+
+Settings now follows the approved reference with a mint gradient header, static cats, a books-and-lamp scene, equal-height rounded cards, section icons and footer botanicals. Reference artwork is embedded as transparent resources while every control stays interactive. Existing two-column, narrow stacking, fixed footer, playback protection, shortcut and all settings remain. Driver, playback, preparation and display/input decisions are unchanged.
+
+历史候选 0.1.9.4：
+
+按用户的内存取舍，将设置页小猫改为已有预览的静态坐姿。保留布局和薄荷色；移除动画计时器、动作图加载、鼠标/键盘摸猫交互及缩放时的动画暂停接线。只内嵌一张静态图。驱动、播放判断、显示准备和关屏/输入决策均未改变。本候选不自动覆盖安装或上传 GitHub。
+
+Settings now uses the existing neutral-pose preview as a static cat. The layout and mint theme remain. Animation timers, sprite-sheet loading, petting input and animation resize hooks are removed. Only one static image is embedded. Driver, playback decisions, preparation and display/input logic are unchanged. No automatic installation or GitHub upload is performed.
+
+历史发行说明：
+
 # ScreenOffTray v0.1.9 · 预发布 / Pre-release
 
 相对公开的0.1.4，本版加入音频白名单播放保护、单行名单管理、独立薄荷设置窗口、首次显示准备引导及可互动猫猫。

@@ -1,4 +1,4 @@
-﻿param([string]$OutputDirectory = '',[switch]$Probe,[switch]$RebuildProbe,[switch]$Remaining,[switch]$LayoutConfirmation,[switch]$TimeoutProbe,[string]$Group = '',[string[]]$Groups = @(),[switch]$CompileOnly)
+﻿param([string]$OutputDirectory = '',[switch]$Probe,[switch]$RebuildProbe,[switch]$Remaining,[switch]$LayoutConfirmation,[switch]$TimeoutProbe,[string]$Group = '',[string[]]$Groups = @(),[switch]$CompileOnly,[switch]$PreviewBatch)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) { $OutputDirectory = Join-Path $projectRoot 'checks/c-ui-0.1.9-20261027/ui' }
@@ -8,14 +8,14 @@ $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 $binary = Join-Path $OutputDirectory 'CSettingsUiHarness.exe'
 # Explicit UI/pure-data allowlist; excludes product entry, coordinator, settings,
 # audio monitors and every display/device adapter. No visible window is shown.
-$sources = @('Ui/SettingsDialog.cs','Ui/PlaybackSettingsPanel.cs','Ui/MintControls.cs','Ui/SettingsDpiContext.cs','Ui/AnimatedCatControl.cs','Ui/ApplicationIconCache.cs','Ui/TrayMenu.cs','HotkeyBinding.cs','AutoOffTiming.cs','Playback/PlaybackContracts.cs','tests/CSettingsUiTests.cs') | ForEach-Object { Join-Path $projectRoot $_ }
-$resources = @('cat-actions.png','cat-variety.png') | ForEach-Object { '/resource:' + (Join-Path $projectRoot ('Ui/Resources/' + $_)) + ',ScreenOffTray.Ui.Resources.' + $_ }
+$sources = @('Ui/SettingsDialog.cs','Ui/PlaybackSettingsPanel.cs','Ui/MintControls.cs','Ui/SettingsDpiContext.cs','Ui/StaticCatControl.cs','Ui/ApplicationIconCache.cs','Ui/TrayMenu.cs','HotkeyBinding.cs','AutoOffTiming.cs','Playback/PlaybackContracts.cs','tests/CSettingsUiTests.cs','tests/SettingsRefreshUiTests.cs','tests/UiDetailTests.cs') | ForEach-Object { Join-Path $projectRoot $_ }
+$resources = @('header-cat.png','header-scene.png','card-left-scene.png','card-right-scene.png','footer-flowers.png') | ForEach-Object { '/resource:' + (Join-Path $projectRoot ('Ui/Resources/theme/' + $_)) + ',ScreenOffTray.Ui.Resources.theme.' + $_ }
 $log = & $compiler /nologo /target:exe /platform:anycpu /codepage:65001 /langversion:5 /warn:4 /main:ScreenOffTray.Tests.CSettingsUiTests /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll "/out:$binary" $resources $sources 2>&1
 $code = $LASTEXITCODE
 [IO.File]::WriteAllText((Join-Path $OutputDirectory 'ui-compile.txt'), (($log -join [Environment]::NewLine) + [Environment]::NewLine + "csc exit=$code"), [Text.Encoding]::UTF8)
 if ($code -ne 0) { throw "Isolated C UI compilation failed: $log" }
 if ($CompileOnly) { return }
-$entries = if ($Groups.Count -gt 0) { @($Groups | ForEach-Object { '--group=' + $_ }) } elseif ($TimeoutProbe) { @('--timeout-probe') } elseif ($Probe) { @('--probe') } elseif ($RebuildProbe) { @('--rebuild-probe') } elseif ($Group) { @('--group=' + $Group) } elseif ($Remaining) {
+$entries = if ($PreviewBatch) { @('--group=preview-zh-CN-0','--group=preview-en-0','--group=preview-zh-CN-192') } elseif ($Groups.Count -gt 0) { @($Groups | ForEach-Object { '--group=' + $_ }) } elseif ($TimeoutProbe) { @('--timeout-probe') } elseif ($Probe) { @('--probe') } elseif ($RebuildProbe) { @('--rebuild-probe') } elseif ($Group) { @('--group=' + $Group) } elseif ($Remaining) {
     @('--group=dpi','--group=modeless','--group=render-zh-CN-144','--group=render-en-96','--group=render-en-120','--group=render-en-144','--group=render-en-192')
 } elseif ($LayoutConfirmation) {
     @('--group=render-zh-CN-144','--group=render-en-96','--group=render-en-120','--group=render-en-144','--group=render-en-192')

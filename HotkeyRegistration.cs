@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace ScreenOffTray
@@ -47,34 +47,36 @@ namespace ScreenOffTray
             if (binding == null || persist == null) {
                 error = "快捷键或保存操作无效 / Invalid hotkey or save operation."; return false;
             }
-            Changing = true;
-            int candidate = 0;
-            try {
-                foreach (KeyValuePair<int, HotkeyBinding> item in reservations)
-                    if (item.Value.SameAs(binding)) { candidate = item.Key; break; }
-                if (candidate == 0) {
-                    candidate = AllocateId();
-                    if (candidate == 0) { error = "快捷键注册资源不足 / Hotkey registration resources exhausted."; return false; }
-                    string registrationError;
-                    if (!registrar.TryRegister(candidate, binding, out registrationError)) {
-                        error = "快捷键被占用或系统拒绝注册 / Hotkey is in use or registration was rejected." +
-                            (String.IsNullOrEmpty(registrationError) ? "" : " " + registrationError);
-                        candidate = 0; return false;
-                    }
-                    reservations.Add(candidate, binding);
-                }
-                persist();
-                // Commit the recognized binding before retiring the old native ID.
-                // A failed unregister leaves only an inert reservation: WM_HOTKEY
-                // never triggers this application, and hooks match Hotkey only.
-                Hotkey = binding; activeId = candidate;
-                CleanupInactive();
-                return true;
-            } catch (Exception ex) {
-                if (candidate != 0 && candidate != activeId) TryRelease(candidate);
-                error = "快捷键保存或注册失败，原快捷键已保留 / Hotkey save or registration failed; previous binding retained. " + ex.Message;
-                return false;
-            } finally { Changing = false; }
+            Reservation ticket;
+            if(!TryReserve(binding,busy,heldInput,out ticket,out error)) return false;
+            using(ticket) {
+                try { persist(); ticket.Commit(); return true; }
+                catch(Exception ex) { error="快捷键保存失败，原快捷键已保留 / Hotkey save failed; previous binding retained. "+ex.Message; return false; }
+            }
+        }
+        internal sealed class Reservation : IDisposable
+        {
+            private HotkeyRegistration owner; private readonly int candidate; private readonly HotkeyBinding binding;
+            internal Reservation(HotkeyRegistration owner,int candidate,HotkeyBinding binding) {this.owner=owner;this.candidate=candidate;this.binding=binding;}
+            internal void Commit() {
+                if(owner==null)throw new InvalidOperationException("Hotkey reservation ended");
+                owner.Hotkey=binding;owner.activeId=candidate;owner.CleanupInactive();owner.Changing=false;owner=null;
+            }
+            public void Dispose() { if(owner==null)return; if(candidate!=owner.activeId)owner.TryRelease(candidate);owner.Changing=false;owner=null; }
+        }
+        internal bool TryReserve(HotkeyBinding binding,bool busy,bool heldInput,out Reservation ticket,out string error)
+        {
+            ticket=null;error=null;
+            if(disposed || busy || heldInput || Changing || binding==null) {error="请先完成恢复并松开按键 / Finish recovery and release held input first.";return false;}
+            int candidate=0;
+            foreach(var item in reservations) if(item.Value.SameAs(binding)) {candidate=item.Key;break;}
+            if(candidate==0) {
+                candidate=AllocateId();
+                if(candidate==0){error="Hotkey registration resources exhausted";return false;}
+                if(!registrar.TryRegister(candidate,binding,out error))return false;
+                reservations.Add(candidate,binding);
+            }
+            Changing=true;ticket=new Reservation(this,candidate,binding);return true;
         }
 
         private int AllocateId()

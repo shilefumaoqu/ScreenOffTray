@@ -1,4 +1,4 @@
-﻿param([string]$ToolsRoot = (Join-Path $env:LOCALAPPDATA 'ScreenOffTray-Build\Tools'))
+﻿param([string]$ToolsRoot = (Join-Path $env:LOCALAPPDATA 'ScreenOffTray-Build\Tools'), [string]$RollbackPayload = '')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2
 $productRoot = Split-Path -Parent $PSScriptRoot
@@ -47,6 +47,11 @@ function Copy-SourceFile([string]$Relative) {
 foreach ($item in @($project.SelectNodes("//*[local-name()='Compile']"))) { Copy-SourceFile $item.Include }
 foreach ($item in @($project.SelectNodes("//*[local-name()='EmbeddedResource']"))) { Copy-SourceFile $item.Include }
 foreach ($file in @('ScreenOffTray.csproj','App.config','app.manifest','图标\ScreenOffTray.ico')) { Copy-SourceFile $file }
+# The separate UI has the same explicit staging boundary; no bin/obj or diagnostics.
+[xml]$uiProject=Get-Content -LiteralPath (Join-Path $productRoot 'WpfSettings\ScreenOffTray.Settings.csproj') -Raw
+Copy-SourceFile 'WpfSettings\ScreenOffTray.Settings.csproj'
+foreach($item in @($uiProject.SelectNodes("//*[local-name()='Compile' or local-name()='EmbeddedResource' or local-name()='Page' or local-name()='Resource' or local-name()='None']"))){Copy-SourceFile ('WpfSettings\'+$item.Include)}
+Copy-SourceFile 'WpfSettings\app.manifest'
 # The helper project has an explicit Compile list; no test/old EXE folders enter staging.
 $helperProjectPath = Join-Path $productRoot 'Installer\DriverSetup.csproj'
 if (!(Test-Path -LiteralPath $helperProjectPath)) { throw 'Missing Installer\DriverSetup.csproj' }
@@ -59,13 +64,15 @@ foreach ($item in @($helperProject.SelectNodes("//*[local-name()='None']") | Whe
     Copy-SourceFile ('Installer\' + $item.Include)
 }
 $msbuild = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe'
-foreach ($target in @('ScreenOffTray.csproj','Installer\DriverSetup.csproj')) {
+foreach ($target in @('ScreenOffTray.csproj','WpfSettings\ScreenOffTray.Settings.csproj','Installer\DriverSetup.csproj')) {
     & $msbuild (Join-Path $source $target) /t:Rebuild /tv:4.0 /p:Configuration=Release /p:Platform=AnyCPU /p:DebugSymbols=false /p:DebugType=none ("/p:TargetFrameworkRootPath=" + (Join-Path $referenceRoot 'build\')) /nologo /v:minimal 2>&1 | Tee-Object -FilePath (Join-Path $checks ((Split-Path -Leaf $target) + '.log'))
     if ($LASTEXITCODE -ne 0) { throw "Build failed: $target" }
 }
 Copy-Item -LiteralPath (Join-Path $source 'bin\Release\ScreenOffTray.exe') -Destination $payload
 Copy-Item -LiteralPath (Join-Path $source 'bin\Release\ScreenOffTray.exe.config') -Destination $payload
 Copy-Item -LiteralPath (Join-Path $source 'Installer\bin\Release\ScreenOffTray.DriverSetup.exe') -Destination $payload
+foreach($name in @('ScreenOffTray.Settings.exe','ScreenOffTray.Settings.exe.config')){Copy-Item -LiteralPath (Join-Path $source ('WpfSettings\bin\Release\'+$name)) -Destination $payload}
+
 foreach ($subdir in @('Driver','Licenses','配置模板')) {
     New-Item -ItemType Directory -Path (Join-Path $payload $subdir) -Force | Out-Null
 }
@@ -91,7 +98,7 @@ $manifest = @(Get-ChildItem -LiteralPath $payload -Recurse -File | ForEach-Objec
 [IO.File]::WriteAllText((Join-Path $output '安装内容清单.json'), ($manifest | ConvertTo-Json -Depth 4), $utf8)
 & $iscc ("--define=SourceRoot=" + $payload) ("--output-dir=" + $output) (Join-Path $PSScriptRoot 'ScreenOffTray.iss') 2>&1 | Tee-Object -FilePath (Join-Path $checks 'Inno-Setup.log')
 if ($LASTEXITCODE -ne 0) { throw 'Inno compilation failed.' }
-$setup = Join-Path $output 'ScreenOffTray-0.1.9-Setup-x64.exe'
+$setup = Join-Path $output 'ScreenOffTray-0.2.0-Setup-x64.exe'
 if (!(Test-Path -LiteralPath $setup)) { throw 'Expected setup output is missing.' }
 $extract = Join-Path $checks '实际安装包内容'
 & (Join-Path $unpackerRoot 'innounp.exe') -x -a -y ("-d" + $extract) $setup 2>&1 | Tee-Object -FilePath (Join-Path $checks '安装包解包.log')
@@ -106,3 +113,38 @@ foreach ($entry in $manifest) {
 $receipt = [ordered]@{ BuiltAt=(Get-Date -Format o); Compiler=$engineVersion; Setup=$setup; SetupSHA256=(Get-FileHash -LiteralPath $setup).Hash; FileCount=$manifest.Count; ContentVerified=$true; Stage=$stage; InstalledOnHost=$false }
 [IO.File]::WriteAllText((Join-Path $output '打包验证.json'), ($receipt | ConvertTo-Json -Depth 4), $utf8)
 Write-Output "Installer built and extracted contents verified: $setup"
+
+if ($RollbackPayload) {
+    $RollbackPayload = [IO.Path]::GetFullPath($RollbackPayload)
+    $oldSetup = Join-Path $output 'ScreenOffTray-0.1.9.9-Setup-x64.exe'
+    if ((Get-FileHash -LiteralPath $oldSetup).Hash -ne 'E51814FBA70872D2D1B25B305CBDB2810261135AB28598865533986F6BBBB36B') { throw 'Original rollback installer pin mismatch.' }
+    $oldReference = Join-Path $checks 'rollback-reference'
+    & (Join-Path $unpackerRoot 'innounp.exe') -x -a -y ("-d"+$oldReference) $oldSetup | Out-File (Join-Path $checks 'rollback-reference.log')
+    if ($LASTEXITCODE) { throw 'Original rollback extraction failed.' }
+    if ([Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $RollbackPayload 'ScreenOffTray.exe')).FileVersion -ne '0.1.9.9') { throw 'Rollback requires original 0.1.9.9 payload.' }
+    $oldManifest = @(Get-ChildItem -LiteralPath $RollbackPayload -Recurse -File | ForEach-Object {
+        [pscustomobject]@{Path=$_.FullName.Substring($RollbackPayload.Length+1);Length=$_.Length;SHA256=(Get-FileHash -LiteralPath $_.FullName).Hash}
+    })
+    $oldExpectedPaths=@(Get-ChildItem -LiteralPath (Join-Path $oldReference '{app}') -Recurse -File|ForEach-Object{$_.FullName.Substring((Join-Path $oldReference '{app}').Length+1)})
+    if (($oldManifest.Path | Sort-Object | Out-String) -ne ($oldExpectedPaths | Sort-Object | Out-String)) { throw 'Rollback allowlist mismatch against pinned original version.' }
+    foreach ($name in $driverPins.Keys) {
+        if ((Get-FileHash -LiteralPath (Join-Path $RollbackPayload ('Driver\'+$name))).Hash -ne $driverPins[$name]) { throw 'Rollback driver mismatch.' }
+    }
+    $oldManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $checks 'rollback-manifest.json') -Encoding UTF8
+    & $iscc ("--define=SourceRoot="+$RollbackPayload) ("--define=VerifierFile="+(Join-Path $payload 'ScreenOffTray.DriverSetup.exe')) '--define=ReleaseVersion=0.1.9.9' '--define=RollbackOnly=1' '--define=PackageSuffix=ProgramRollback-x64' ("--output-dir="+$output) (Join-Path $PSScriptRoot 'ScreenOffTray.iss') 2>&1 | Tee-Object (Join-Path $checks 'rollback-build.log')
+    if ($LASTEXITCODE) { throw 'Rollback compilation failed.' }
+    $rollback = Join-Path $output 'ScreenOffTray-0.1.9.9-ProgramRollback-x64.exe'
+    $oldExtract = Join-Path $checks 'rollback-extract'
+    & (Join-Path $unpackerRoot 'innounp.exe') -x -a -y ("-d"+$oldExtract) $rollback | Out-File (Join-Path $checks 'rollback-extract.log')
+    if ($LASTEXITCODE) { throw 'Rollback extraction failed.' }
+    if (@(Get-ChildItem -LiteralPath (Join-Path $oldExtract '{app}') -Recurse -File).Count -ne $oldManifest.Count) { throw 'Rollback extracted file count differs.' }
+    foreach ($entry in $oldManifest) {
+        if ((Get-FileHash -LiteralPath (Join-Path $oldReference ('{app}\'+$entry.Path))).Hash -ne $entry.SHA256) { throw 'Rollback payload is not original published bytes.' }
+        if ((Get-FileHash -LiteralPath (Join-Path $oldExtract ('{app}\'+$entry.Path))).Hash -ne $entry.SHA256) { throw 'Rollback extracted bytes differ.' }
+    }
+    foreach ($directory in @($extract,$oldExtract)) {
+        $verifiers = @(Get-ChildItem -LiteralPath $directory -Recurse -File | Where-Object Name -eq 'ScreenOffTray.UpgradeCheck.exe')
+        if ($verifiers.Count -ne 1 -or (Get-FileHash -LiteralPath $verifiers[0].FullName).Hash -ne (Get-FileHash -LiteralPath (Join-Path $payload 'ScreenOffTray.DriverSetup.exe')).Hash) { throw 'Temporary verifier missing or changed.' }
+    }
+    [ordered]@{Setup=$rollback;SHA256=(Get-FileHash -LiteralPath $rollback).Hash;AppOnly=$true;ExtractedVerified=$true;InstalledOnHost=$false} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output '回退包验证.json') -Encoding UTF8
+}

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -8,7 +8,7 @@ namespace ScreenOffTray
     {
         internal const string MutexName = @"Local\ScreenOffTray";
 
-        internal enum EntryMode { Tray, Setup, SupportCheck, SelfTest, Watchdog, Recover, InstallationCheck, Invalid }
+        internal enum EntryMode { Tray, Setup, SupportCheck, SelfTest, Watchdog, Recover, InstallationCheck, Invalid, LaunchVerified, StartupReport }
         internal static EntryMode SelectMode(string[] args)
         {
             if (args == null || args.Length == 0) return EntryMode.Tray;
@@ -24,6 +24,8 @@ namespace ScreenOffTray
                 return EntryMode.SupportCheck;
             if (args.Length == 1 && String.Equals(args[0], "--self-test", StringComparison.OrdinalIgnoreCase))
                 return EntryMode.SelfTest;
+            if((args.Length==1 || (args.Length==2 && args[1]=="--setup")) && args[0]=="--launch-verified")return EntryMode.LaunchVerified;
+            if(VerifiedLaunch.ValidReportArguments(args))return EntryMode.StartupReport;
             return EntryMode.Invalid;
         }
 
@@ -31,6 +33,7 @@ namespace ScreenOffTray
         private static void Main(string[] args)
         {
             EntryMode mode = SelectMode(args);
+            if(mode==EntryMode.LaunchVerified){Environment.ExitCode=VerifiedLaunch.Run(args.Length==2);return;}
             if (mode == EntryMode.InstallationCheck)
             {
                 Environment.ExitCode = InstallationDiagnostics.Run(args[1], args.Length == 3 ? args[2] : null);
@@ -64,11 +67,13 @@ namespace ScreenOffTray
                 return;
             }
 
+            if(mode==EntryMode.StartupReport && !VerifiedLaunch.BrokerStillAlive(args)){Environment.ExitCode=VerifiedLaunch.Failed;return;}
             bool createdNew;
             using (var mutex = new Mutex(true, MutexName, out createdNew))
             {
                 if (!createdNew)
                 {
+                    if(mode==EntryMode.StartupReport){Environment.ExitCode=VerifiedLaunch.Failed;return;}
                     MessageBox.Show(
                         "自动关屏程序已经在运行。",
                         "自动关屏",
@@ -79,7 +84,10 @@ namespace ScreenOffTray
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new TrayApplicationContext(mode == EntryMode.Setup));
+                bool setup=mode==EntryMode.Setup || (mode==EntryMode.StartupReport && args.Length==5);
+                Action<bool,bool> report=mode==EntryMode.StartupReport?new Action<bool,bool>((ready,shown)=>VerifiedLaunch.Report(args,ready,shown)):null;
+                try{Application.Run(new TrayApplicationContext(setup,report));}
+                catch(Exception ex){OledPrototype.Program.Log("application_start_failed: "+ex);Environment.ExitCode=1;}
             }
         }
 

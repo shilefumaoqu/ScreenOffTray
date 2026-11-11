@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace ScreenOffTray.Playback
@@ -96,6 +96,7 @@ namespace ScreenOffTray.Playback
             {
                 Known = audio.Known,
                 SampleUtc = audio.SampleUtc,
+                SampleTicks = audio.SampleTicks, HasMonotonicSample = audio.HasMonotonicSample,
                 Error = audio.Error,
                 Warning = audio.Warning,
                 UnidentifiedSourceCount = audio.UnidentifiedSourceCount,

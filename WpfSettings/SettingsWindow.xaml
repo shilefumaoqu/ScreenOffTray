@@ -1,0 +1,408 @@
+<Window x:Class="ScreenOffTray.SettingsUi.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ScreenOffTray · 设置"
+        Width="1120" Height="800"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
+        FontFamily="{DynamicResource UiFont}" FontSize="14"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Loaded="OnLoaded" KeyDown="OnWindowKeyDown">
+  <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="Theme.xaml"/>
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Window.Resources>
+
+  <Grid x:Name="Stage">
+    <Grid.Background>
+      <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#E8EDF3" Offset="0"/>
+        <GradientStop Color="#DDE5ED" Offset="0.52"/>
+        <GradientStop Color="#CDD8E3" Offset="1"/>
+      </LinearGradientBrush>
+    </Grid.Background>
+    <Canvas x:Name="GeometryLayer" ClipToBounds="True">
+      <Ellipse Width="620" Height="620" Canvas.Left="-230" Canvas.Top="-260" Fill="#F0785D"/>
+      <Rectangle Width="520" Height="980" Canvas.Left="800" Canvas.Top="-90" Fill="#405AD4" RenderTransformOrigin="0.5,0.5">
+        <Rectangle.RenderTransform><RotateTransform Angle="15"/></Rectangle.RenderTransform>
+      </Rectangle>
+      <Path Fill="#268B73" Data="M -110 650 C 70 780 260 640 430 670 C 610 700 700 850 710 930 L -110 930 Z"/>
+      <Ellipse Width="390" Height="390" Canvas.Left="870" Canvas.Top="560" Fill="#EDBF45"/>
+      <Rectangle Width="55" Height="900" Canvas.Left="250" Canvas.Top="-50" Fill="#24262C" Opacity="0.82"/>
+      <Rectangle Width="19" Height="900" Canvas.Left="265" Canvas.Top="-50" Fill="#E9E6DE" Opacity="0.8"/>
+    </Canvas>
+
+    <Border x:Name="Shell" Margin="24" CornerRadius="20" BorderBrush="#24000000" BorderThickness="1" ClipToBounds="True">
+      <Border.Effect>
+        <DropShadowEffect BlurRadius="45" ShadowDepth="17" Direction="270" Opacity="0.224" Color="#000000"/>
+      </Border.Effect>
+      <Border.Background>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+          <GradientStop Color="#EAF6F7F9" Offset="0"/>
+          <GradientStop Color="#E8EDF1F5" Offset="1"/>
+        </LinearGradientBrush>
+      </Border.Background>
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="216"/>
+          <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border x:Name="SidebarSurface" Grid.Column="0" Background="#16808080" BorderBrush="{DynamicResource Stroke}" BorderThickness="0,0,1,0">
+          <Grid Margin="12,23,12,20">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+              <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="11,0,11,28">
+              <Image Source="Assets/app-icon.png" Width="38" Height="38" Margin="0,0,10,0" Stretch="Uniform"/>
+              <TextBlock Text="ScreenOffTray" FontSize="16" FontWeight="SemiBold"
+                         Foreground="{DynamicResource Text1}" VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <StackPanel Grid.Row="1">
+              <RadioButton x:Name="GeneralNav" Style="{StaticResource NavButton}" IsChecked="True" GroupName="SettingsPage" Tag="general" Click="OnNavClick">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="17" Height="17" Stroke="{DynamicResource Accent}" StrokeThickness="1.75" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M12 8 A4 4 0 1 0 12 16 A4 4 0 1 0 12 8 M19 12 L21 12 M3 12 L5 12 M12 3 L12 5 M12 19 L12 21 M16.95 7.05 L18.36 5.64 M5.64 18.36 L7.05 16.95 M16.95 16.95 L18.36 18.36 M5.64 5.64 L7.05 7.05" Stretch="Uniform"/>
+                  <TextBlock Text="通用" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="PlaybackNav" Style="{StaticResource NavButton}" GroupName="SettingsPage" Tag="playback" Click="OnNavClick">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="17" Height="17" Stroke="{DynamicResource Text2}" StrokeThickness="1.75" StrokeLineJoin="Round" Data="M8 5 L19 12 L8 19 Z" Stretch="Uniform"/>
+                  <TextBlock Text="播放保护" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="AboutNav" Style="{StaticResource NavButton}" GroupName="SettingsPage" Tag="about" Click="OnNavClick">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="17" Height="17" Stroke="{DynamicResource Text2}" StrokeThickness="1.75" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M12 11 L12 17 M12 7 L12 7.2" Stretch="Uniform"/>
+                  <TextBlock Text="关于" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+            </StackPanel>
+
+            <Button x:Name="SidebarStatusButton" Grid.Row="2" Style="{StaticResource LinkButton}" HorizontalContentAlignment="Left"
+                    Padding="7,8" ToolTip="重新检查显示条件" Click="OnCheckClick">
+              <StackPanel Orientation="Horizontal">
+                <Ellipse x:Name="SidebarStatusDot" Width="7" Height="7" Fill="{DynamicResource Success}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="SidebarStatusText" Text="显示已就绪" Foreground="{DynamicResource Text1}" FontSize="12"/>
+                <TextBlock Text="检查" Foreground="{DynamicResource Accent}" FontSize="12" Margin="12,0,0,0"/>
+              </StackPanel>
+            </Button>
+          </Grid>
+        </Border>
+
+        <Grid Grid.Column="1">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="92"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="62"/>
+          </Grid.RowDefinitions>
+
+          <Grid Grid.Row="0" Margin="24,18,16,8" Background="Transparent" MouseLeftButtonDown="OnHeaderMouseDown">
+            <StackPanel>
+              <TextBlock x:Name="PageTitle" Text="通用" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource Text1}"/>
+              <TextBlock x:Name="PageDescription" Text="启动方式、显示准备与关屏设置" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+              <Button x:Name="MinimizeButton" Style="{StaticResource IconButton}" ToolTip="最小化" Click="OnMinimize">
+                <Path Width="13" Height="1.5" Stretch="Fill" Stroke="{DynamicResource Text2}" StrokeThickness="1.5" Data="M0 1 L13 1"/>
+              </Button>
+              <Button x:Name="CloseButton" Style="{StaticResource IconButton}" Margin="4,0,0,0" ToolTip="关闭设置 (Esc)" Click="OnCancelClick">
+                <Path Width="14" Height="14" Stroke="{DynamicResource Text2}" StrokeThickness="1.6" Data="M3 3 L15 15 M15 3 L3 15" Stretch="Uniform"/>
+              </Button>
+            </StackPanel>
+          </Grid>
+
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24,0,24,18">
+            <Grid>
+            <StackPanel x:Name="GeneralPage">
+              <Border x:Name="MigrationPanel" Visibility="Collapsed" CornerRadius="12" Padding="14,12" Margin="0,0,0,18"
+                      BorderBrush="{DynamicResource Stroke}" BorderThickness="1" Background="{DynamicResource FillControl}">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="发现不同的旧关闭时间" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Text1}"/>
+                    <TextBlock Text="请选择要保留的值，程序不会自行覆盖。" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,4,0,0"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ComboBox x:Name="MigrationChoices" Style="{StaticResource ThemedComboBox}" Width="112" Margin="0,0,8,0"/>
+                    <Button x:Name="MigrationApply" Style="{StaticResource SecondaryButton}" Content="应用" Click="OnMigrationApply"/>
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <Border x:Name="SetupNotice" Visibility="Collapsed" CornerRadius="12" Padding="14,12" Margin="0,0,0,18"
+                      BorderBrush="{DynamicResource Stroke}" BorderThickness="1" Background="{DynamicResource WarningSurface}">
+                <Grid>
+                  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <Border x:Name="NoticeIconSurface" Width="22" Height="22" CornerRadius="11" VerticalAlignment="Top" Background="{DynamicResource Warning}">
+                    <TextBlock x:Name="NoticeIcon" Text="!" FontSize="13" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </Border>
+                  <StackPanel Grid.Column="1" Margin="10,0,16,0">
+                    <TextBlock x:Name="NoticeTitle" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Text1}" Text="显示准备需要处理"/>
+                    <TextBlock x:Name="NoticeBody" FontSize="12" Foreground="{DynamicResource Text2}" TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="19"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="CancelPrepareButton" Style="{StaticResource SecondaryButton}" Content="取消准备" Visibility="Collapsed" Margin="0,0,8,0" Click="OnCancelPrepare"/>
+                    <Button x:Name="DisplaySettingsButton" Style="{StaticResource LinkButton}" Content="显示设置" Margin="0,0,10,0" Click="OnDisplaySettings"/>
+                    <Button x:Name="NoticeAction" Style="{StaticResource SecondaryButton}" Content="一键准备" Click="OnPrepareClick"/>
+                  </StackPanel>
+                  <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="34,10,0,0">
+                    <Expander Header="诊断详情">
+                      <ScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock x:Name="DiagnosticText" FontSize="11" Foreground="{DynamicResource Text2}" TextWrapping="Wrap"/>
+                      </ScrollViewer>
+                    </Expander>
+                  </StackPanel>
+                </Grid>
+              </Border>
+
+              <TextBlock Text="显示准备" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Text2}" Margin="2,0,0,8"/>
+              <Border Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,20">
+                <Border Padding="14,10" MinHeight="58">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="一键准备" FontSize="14" Foreground="{DynamicResource Text1}"/>
+                      <TextBlock Text="每次重新识别实体屏与虚拟屏，并按需匹配缩放" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                      <TextBlock x:Name="PrepareStateText" Text="已就绪" FontSize="12" Foreground="{DynamicResource Success}" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                      <Button x:Name="PrepareButton" Style="{StaticResource SecondaryButton}" Content="重新检查" Click="OnPrepareClick"/>
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </Border>
+
+              <TextBlock Text="基础设置" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Text2}" Margin="2,0,0,8"/>
+              <Border Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,20">
+                <StackPanel>
+                  <Border Padding="14,10" MinHeight="58">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="空闲关屏" FontSize="14" Foreground="{DynamicResource Text1}"/>
+                        <TextBlock Text="没有实体键鼠操作后自动关闭显示器" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Background="{DynamicResource FillSelected}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="10" Height="32">
+                          <Grid Width="102">
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Style="{StaticResource IconButton}" Content="−" FontSize="16" Click="OnMinutesDown"/>
+                            <TextBox x:Name="MinutesInput" Grid.Column="1" Text="3" Style="{StaticResource InputBox}" BorderThickness="0" Background="Transparent" TextAlignment="Center" VerticalContentAlignment="Center" FontSize="12" Padding="0" PreviewTextInput="OnMinutesTextInput"/>
+                            <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="+" FontSize="15" Click="OnMinutesUp"/>
+                          </Grid>
+                        </Border>
+                        <TextBlock Text="分钟" FontSize="12" Foreground="{DynamicResource Text2}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                  <Border BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Padding="14,10" MinHeight="58">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="关屏快捷键" FontSize="14" Foreground="{DynamicResource Text1}"/>
+                        <TextBlock Text="点击输入框后按组合键；第一次实体输入只负责亮屏" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBox x:Name="HotkeyInput" Text="Ctrl + Alt + F10" Style="{StaticResource InputBox}" Width="150" TextAlignment="Center" PreviewKeyDown="OnHotkeyPreviewKeyDown" GotKeyboardFocus="OnHotkeyGotFocus" ToolTip="聚焦后直接按新的实体快捷键"/>
+                        <Button Style="{StaticResource SecondaryButton}" Content="恢复默认" Margin="8,0,0,0" Click="OnResetHotkey"/>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                  <Border BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Padding="14,10" MinHeight="58">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="界面语言" FontSize="14" Foreground="{DynamicResource Text1}"/>
+                        <TextBlock Text="切换后将使用所选语言" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/>
+                      </StackPanel>
+                      <Border Grid.Column="1" Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="10" Padding="2">
+                        <StackPanel Orientation="Horizontal">
+                          <RadioButton x:Name="ChineseChoice" Style="{StaticResource SegmentedChoice}" GroupName="Language" Content="简体中文" IsChecked="True"/>
+                          <RadioButton x:Name="EnglishChoice" Style="{StaticResource SegmentedChoice}" GroupName="Language" Content="English"/>
+                        </StackPanel>
+                      </Border>
+                    </Grid>
+                  </Border>
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="启动与更新" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Text2}" Margin="2,0,0,8"/>
+              <Border Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="12">
+                <StackPanel>
+                  <Border Padding="14,10" MinHeight="56">
+                    <Grid>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="开机启动" FontSize="14" Foreground="{DynamicResource Text1}"/>
+                        <TextBlock Text="登录 Windows 后自动在托盘运行" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/>
+                      </StackPanel>
+                      <CheckBox x:Name="StartupSwitch" Style="{StaticResource SwitchCheck}" HorizontalAlignment="Right" VerticalAlignment="Center" ToolTip="开机启动"/>
+                    </Grid>
+                  </Border>
+                  <Border BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Padding="14,10" MinHeight="56">
+                    <Grid>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="自动检查更新" FontSize="14" Foreground="{DynamicResource Text1}"/>
+                        <TextBlock Text="发现新版本时提示，不会自动安装" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/>
+                      </StackPanel>
+                      <CheckBox x:Name="UpdatesSwitch" Style="{StaticResource SwitchCheck}" IsChecked="True" HorizontalAlignment="Right" VerticalAlignment="Center" ToolTip="自动检查更新"/>
+                    </Grid>
+                  </Border>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+
+            <StackPanel x:Name="PlaybackPage" Visibility="Collapsed">
+              <TextBlock Text="正在播放" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Text2}" Margin="2,0,0,8"/>
+              <Border Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,20">
+                <StackPanel>
+                  <Border Padding="14,10" MinHeight="58">
+                    <Grid>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="当前播放程序" FontSize="14" Foreground="{DynamicResource Text1}"/>
+                        <TextBlock x:Name="PlaybackSummary" Text="检测到 1 个白名单程序正在播放，自动关屏已暂停" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/>
+                      </StackPanel>
+                      <Button Style="{StaticResource LinkButton}" Content="刷新" HorizontalAlignment="Right" VerticalAlignment="Center" Click="OnRefreshPlayback"/>
+                    </Grid>
+                  </Border>
+                  <StackPanel x:Name="PlayingRows"/>
+                  <Border x:Name="PlaybackEmptyPanel" Visibility="Collapsed" BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Padding="14,18">
+                    <StackPanel HorizontalAlignment="Center">
+                      <TextBlock Text="暂无正在播放的程序" FontSize="14" Foreground="{DynamicResource Text1}" HorizontalAlignment="Center"/>
+                      <TextBlock Text="白名单程序开始播放后会自动出现在这里" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,4,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+              </Border>
+
+              <TextBlock x:Name="WhitelistLabel" Text="白名单（10）" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Text2}" Margin="2,0,0,8"/>
+              <Border Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,20">
+                <StackPanel>
+                  <Border Padding="14,10" MinHeight="62">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <ComboBox x:Name="WhitelistCombo" Style="{StaticResource ThemedComboBox}" Margin="0,0,10,0" ToolTip="白名单按程序完整路径保存"/>
+                      <Button x:Name="RemoveWhitelistButton" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="移除" Click="OnRemoveWhitelist"/>
+                    </Grid>
+                  </Border>
+                  <Border BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Padding="14,10">
+                    <Grid>
+                      <TextBlock Text="名单内程序播放音频时，暂缓自动关屏。添加和移除即时保存。" FontSize="12" Foreground="{DynamicResource Text2}" TextWrapping="Wrap"/>
+                      <TextBlock Text="即时保存" FontSize="11" Foreground="{DynamicResource Text3}" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                    </Grid>
+                  </Border>
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="保护上限" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Text2}" Margin="2,0,0,8"/>
+              <Border Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="12">
+                <Border Padding="14,10" MinHeight="62">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="连续播放时也关闭屏幕" FontSize="14" Foreground="{DynamicResource Text1}"/>
+                      <TextBlock Text="无实体操作达到上限后，播放不再阻止关屏" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                      <CheckBox x:Name="ProtectionLimitSwitch" Style="{StaticResource SwitchCheck}" IsChecked="True" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                      <Border Background="{DynamicResource FillSelected}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="10" Height="32">
+                        <Grid Width="102">
+                          <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                          <Button Grid.Column="0" Style="{StaticResource IconButton}" Content="−" FontSize="16" Click="OnProtectionMinutesDown"/>
+                          <TextBox x:Name="ProtectionMinutesInput" Grid.Column="1" Text="60" Style="{StaticResource InputBox}" BorderThickness="0" Background="Transparent" TextAlignment="Center" VerticalContentAlignment="Center" FontSize="12" Padding="0" PreviewTextInput="OnMinutesTextInput"/>
+                          <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="+" FontSize="15" Click="OnProtectionMinutesUp"/>
+                        </Grid>
+                      </Border>
+                      <TextBlock Text="分钟" FontSize="12" Foreground="{DynamicResource Text2}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </Border>
+            </StackPanel>
+
+            <StackPanel x:Name="AboutPage" Visibility="Collapsed">
+              <Border Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="12" Padding="18" Margin="0,0,0,20">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <Image Source="Assets/app-icon.png" Width="82" Height="82" Stretch="Uniform"/>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="ScreenOffTray" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource Text1}"/>
+                    <TextBlock Text="版本 0.2.0 · Windows x64" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
+                    <TextBlock Text="只关闭显示器，后台程序和任务继续运行。" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
+                    <TextBlock x:Name="UpdateStatusText" Visibility="Collapsed" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Accent}" Margin="0,6,0,0"/>
+                  </StackPanel>
+                  <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="检查更新" VerticalAlignment="Center" Click="OnUpdateClick"/>
+                </Grid>
+              </Border>
+
+              <TextBlock Text="关屏与唤醒" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Text2}" Margin="2,0,0,8"/>
+              <Border Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,20">
+                <StackPanel>
+                  <Border Padding="14,10" MinHeight="56"><Grid><StackPanel><TextBlock Text="立即关屏" FontSize="14" Foreground="{DynamicResource Text1}"/><TextBlock Text="默认快捷键，可在通用页修改" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/></StackPanel><Border HorizontalAlignment="Right" VerticalAlignment="Center" Padding="8,3" CornerRadius="5" BorderBrush="{DynamicResource Stroke}" BorderThickness="1"><TextBlock Text="Ctrl + Alt + F10" FontSize="11" Foreground="{DynamicResource Text2}"/></Border></Grid></Border>
+                  <Border BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Padding="14,10" MinHeight="56"><StackPanel><TextBlock Text="3 秒防误触" FontSize="14" Foreground="{DynamicResource Text1}"/><TextBlock Text="保护期内的实体输入不会唤醒，也不会传给当前软件" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/></StackPanel></Border>
+                  <Border BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Padding="14,10" MinHeight="56"><StackPanel><TextBlock Text="首次输入只负责亮屏" FontSize="14" Foreground="{DynamicResource Text1}"/><TextBlock Text="松开后再次按键或点击，才会正常操作软件" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/></StackPanel></Border>
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="外观" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Text2}" Margin="2,0,0,8"/>
+              <Border Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,20">
+                <Border Padding="14,10" MinHeight="56">
+                  <Grid>
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="窗口外观" FontSize="14" Foreground="{DynamicResource Text1}"/>
+                      <TextBlock Text="三套外观只改变设置窗口材质，选择会随设置保存" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/>
+                    </StackPanel>
+                    <Border HorizontalAlignment="Right" Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="10" Padding="2">
+                      <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="GeometryChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="几何" IsChecked="True" Tag="geometry" Click="OnBackgroundChoice"/>
+                        <RadioButton x:Name="WarmChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="暖白" Tag="warm" Click="OnBackgroundChoice"/>
+                        <RadioButton x:Name="BlackChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="黑色" Tag="black" Click="OnBackgroundChoice"/>
+                      </StackPanel>
+                    </Border>
+                  </Grid>
+                </Border>
+              </Border>
+
+              <TextBlock Text="数据与帮助" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Text2}" Margin="2,0,0,8"/>
+              <Border Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="12">
+                <StackPanel>
+                  <Border Padding="14,10" MinHeight="56"><Grid><StackPanel><TextBlock Text="设置保存在本机" FontSize="14" Foreground="{DynamicResource Text1}"/><TextBlock Text="安装版由独立后台读写；当前预览不会修改正式配置" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/></StackPanel><TextBlock Text="本地" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource Success}"/></Grid></Border>
+                  <Border BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Padding="14,10" MinHeight="56"><Grid><StackPanel><TextBlock Text="打开使用帮助" FontSize="14" Foreground="{DynamicResource Text1}"/><TextBlock Text="查看显示准备、播放保护与快捷键说明" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,3,0,0"/></StackPanel><Button Style="{StaticResource LinkButton}" Content="打开" HorizontalAlignment="Right" VerticalAlignment="Center" Click="OnHelpClick"/></Grid></Border>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+            </Grid>
+          </ScrollViewer>
+
+          <Border x:Name="ErrorBanner" Grid.Row="2" Visibility="Collapsed" Background="{DynamicResource DangerSurface}" BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Padding="24,8">
+            <TextBlock x:Name="ErrorText" FontSize="12" Foreground="{DynamicResource Danger}" TextWrapping="Wrap"/>
+          </Border>
+
+          <Border x:Name="FooterBar" Grid.Row="3" BorderBrush="{DynamicResource Stroke}" BorderThickness="0,1,0,0" Background="#EAF4F5F7">
+            <Grid Margin="24,0,16,0">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBlock x:Name="FooterHint" Text="更改将在保存后生效" FontSize="11" Foreground="{DynamicResource Text3}" VerticalAlignment="Center"/>
+              <StackPanel x:Name="FooterActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="CancelButton" Style="{StaticResource SecondaryButton}" Content="取消" Padding="18,0" Click="OnCancelClick"/>
+                <Button x:Name="SaveButton" Style="{StaticResource PrimaryButton}" Content="保存" Margin="8,0,0,0" Click="OnSaveClick"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+        </Grid>
+      </Grid>
+    </Border>
+
+    <Border x:Name="Toast" Visibility="Collapsed" Opacity="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,42"
+            Background="#F2181B22" CornerRadius="11" Padding="14,9">
+      <TextBlock x:Name="ToastText" Foreground="White" FontSize="12"/>
+    </Border>
+  </Grid>
+</Window>

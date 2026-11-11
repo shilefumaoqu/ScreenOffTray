@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -44,11 +44,18 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="VerifiedLaunch.cs" />
     <Compile Include="TrayApplicationContext.cs" />
+    <Compile Include="SettingsUiBridge.cs" />
+    <Compile Include="SettingsValues.cs" />
+    <Compile Include="SettingsPipeHost.cs" />
+    <Compile Include="SettingsWire.cs" />
     <Compile Include="HotkeyBinding.cs" />
     <Compile Include="HotkeyRegistration.cs" />
     <Compile Include="NativeMethods.cs" />
     <Compile Include="AutoOffTiming.cs" />
+    <Compile Include="RuntimeCoordination.cs" />
+    <Compile Include="SerializedSettingsWriter.cs" />
     <Compile Include="AutoOffStatusText.cs" />
     <Compile Include="Playback\PlaybackContracts.cs" />
     <Compile Include="Playback\PlaybackProtection.cs" />
@@ -64,17 +71,13 @@
     <Compile Include="InstallationDiagnostics.cs" />
     <Compile Include="SettingsMigration.cs" />
     <Compile Include="DisplaySetup.cs" />
+    <Compile Include="VirtualDpiMatching.cs" />
+    <Compile Include="VirtualModeConfig.cs" />
+    <Compile Include="VirtualModeAdaptation.cs" />
+    <Compile Include="VirtualModeNative.cs" />
     <Compile Include="SetupPromptPolicy.cs" />
     <Compile Include="UpdateChecker.cs" />
     <Compile Include="Ui\TrayMenu.cs" />
-    <Compile Include="Ui\SettingsDialog.cs" />
-    <Compile Include="Ui\SettingsDpiContext.cs" />
-    <Compile Include="Ui\FirstRunSetupDialog.cs" />
-    <Compile Include="Ui\PlaybackSettingsPanel.cs" />
-    <Compile Include="Ui\MintControls.cs" />
-    <Compile Include="Ui\AnimatedCatControl.cs" />
-    <Compile Include="Ui\ApplicationIconCache.cs" />
-    <Compile Include="Ui\TimeoutDialog.cs" />
     <Compile Include="Oled\DisplayBackend.cs" />
     <Compile Include="Oled\InputGate.cs" />
     <Compile Include="Oled\TransitionDeadline.cs" />
@@ -88,12 +91,6 @@
     <Compile Include="Oled\RuntimeMaintenance.cs" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Ui\Resources\cat-actions.png">
-      <LogicalName>ScreenOffTray.Ui.Resources.cat-actions.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Ui\Resources\cat-variety.png">
-      <LogicalName>ScreenOffTray.Ui.Resources.cat-variety.png</LogicalName>
-    </EmbeddedResource>
     <None Include="Properties\Settings.settings" />
     <None Include="README.md" />
     <None Include="App.config" />

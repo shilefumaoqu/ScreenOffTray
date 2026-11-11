@@ -30,6 +30,7 @@ namespace ScreenOffTray.Ui
 
         internal static SettingsDpiContext EnterUi() { return new SettingsDpiContext(PerMonitorV2); }
         internal static SettingsDpiContext EnterHost(IntPtr context) { return new SettingsDpiContext(context); }
+        internal static bool IsUiWindow(IntPtr window) { return AreDpiAwarenessContextsEqual(GetWindowDpiAwarenessContext(window),PerMonitorV2); }
 
         public void Dispose()
         {
@@ -42,5 +43,7 @@ namespace ScreenOffTray.Ui
 
         [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
         [DllImport("user32.dll")] private static extern IntPtr GetThreadDpiAwarenessContext();
+        [DllImport("user32.dll")] private static extern IntPtr GetWindowDpiAwarenessContext(IntPtr window);
+        [DllImport("user32.dll")] private static extern bool AreDpiAwarenessContextsEqual(IntPtr first,IntPtr second);
     }
 }
