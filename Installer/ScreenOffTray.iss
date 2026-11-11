@@ -4,7 +4,7 @@
 #endif
 
 #ifndef ReleaseVersion
-#define ReleaseVersion "0.2.0"
+#define ReleaseVersion "0.2.1"
 #endif
 #ifndef RollbackOnly
 #define RollbackOnly "0"
@@ -49,7 +49,16 @@ OutputDir=..\安装包
 OutputBaseFilename=ScreenOffTray-{#ReleaseVersion}-{#PackageSuffix}
 Compression=lzma2
 SolidCompression=yes
-WizardStyle=modern
+WizardStyle=modern dynamic polar hidebevels
+WizardImageFile=Assets\wizard-side-light.png
+WizardImageFileDynamicDark=Assets\wizard-side-dark.png
+WizardSmallImageFile=Assets\wizard-small.png
+WizardSmallImageFileDynamicDark=Assets\wizard-small.png
+WizardBackImageFile=Assets\wizard-back-light.png
+WizardBackImageFileDynamicDark=Assets\wizard-back-dark.png
+WizardBackImageOpacity=210
+WizardImageOpacity=235
+SetupIconFile=..\图标\ScreenOffTray.ico
 UninstallDisplayIcon={app}\ScreenOffTray.exe
 UninstallFilesDir={app}\卸载
 SetupLogging=yes
@@ -108,8 +117,8 @@ begin
     if not GetVersionNumbers(AddBackslash(WizardDirValue)+'ScreenOffTray.exe',VersionMS,VersionLS) then begin
       Result := '无法核实旧程序版本，已停止升级。'; Exit;
     end;
-    { Numeric file version 0.2.0.0; the separate rollback package explicitly permits downgrade. }
-    if (VersionMS > 2) or ((VersionMS = 2) and (VersionLS > 0)) then begin
+    { Numeric file version 0.2.1.0; the separate rollback package explicitly permits downgrade. }
+    if (VersionMS > 2) or ((VersionMS = 2) and (VersionLS > 65536)) then begin
       Result := '已安装版本更高，请使用对应版本安装包。'; Exit;
     end;
   end;

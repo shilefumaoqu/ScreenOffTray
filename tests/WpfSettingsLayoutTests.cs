@@ -50,6 +50,8 @@ internal static class WpfSettingsLayoutTests
                 string tag=english?"en":"zh";
                 Check(Math.Abs(window.Width/window.Height-1.4)<0.001,tag+" preserves the 7:5 window ratio");
                 Check(window.ActualWidth>0 && window.ActualHeight>0,tag+" has a visible native work area");
+                Check(Field<Border>(window,"Shell").Margin==new Thickness(0),tag+" uses the glass shell as the window boundary without a display backdrop");
+                Check(((SolidColorBrush)Field<Border>(window,"FooterBar").Background).Color.A==255,tag+" keeps the footer surface opaque to prevent transparent-window ghosting");
                 Check(Field<ComboBox>(window,"WhitelistCombo").Items.Count==10,tag+" renders all ten allowlist entries");
                 Check(Field<Border>(window,"FooterBar").ActualHeight>0,tag+" keeps a fixed footer");
                 Check(Field<Button>(window,"SaveButton").IsVisible && Field<Button>(window,"CancelButton").IsVisible,tag+" keeps save and cancel visible");
@@ -64,11 +66,19 @@ internal static class WpfSettingsLayoutTests
                 window.SetPlaybackState(true,false);
                 Check(summary.Text.Contains(english?"limit reached":"上限已到"),tag+" reports that the playback limit ended protection");
 
+                string lightShell=null,warmShell=null,blackShell=null;
                 foreach(string theme in new[]{"geometry","warm","black","geometry"}) {
                     window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,theme);
                     Check(window.InterfaceTheme==theme,tag+" applies "+theme+" appearance");
+                    string shellColor=((LinearGradientBrush)Field<Border>(window,"Shell").Background).GradientStops[0].Color.ToString();
+                    if(theme=="geometry")lightShell=shellColor;
+                    else if(theme=="warm")warmShell=shellColor;
+                    else blackShell=shellColor;
+                    ShowPage(window,"general");
+                    Capture(window,"settings-"+theme+"-"+tag+".png");
                 }
-                Check(Field<Canvas>(window,"GeometryLayer").Visibility==Visibility.Visible,tag+" geometry decorations are visible by default");
+                Check(lightShell!=warmShell && warmShell!=blackShell && lightShell!=blackShell,tag+" uses distinct top-level colors for all three appearances");
+                Check(window.FindName("GeometryLayer")==null,tag+" removes the reference image's colored geometry wallpaper");
                 ShowPage(window,"playback");Capture(window,"settings-playback-"+tag+".png");
                 ShowPage(window,"about");Capture(window,"settings-about-"+tag+".png");
                 ShowPage(window,"general");Capture(window,"settings-general-"+tag+".png");

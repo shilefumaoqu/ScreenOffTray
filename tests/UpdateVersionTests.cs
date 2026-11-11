@@ -21,13 +21,16 @@ namespace ScreenOffTray.Tests {
             Test("0.1.9.13","v0.2.0",UpdateCheckStatus.Available);
             Test("0.2.0","v0.1.9.13",UpdateCheckStatus.UpToDate);
             Test("0.2.0","v0.2.0",UpdateCheckStatus.UpToDate);
+            Test("0.2.0","v0.2.1",UpdateCheckStatus.Available);
+            Test("0.2.1","v0.2.0",UpdateCheckStatus.UpToDate);
+            Test("0.2.1","v0.2.1",UpdateCheckStatus.UpToDate);
             var unused=new Fake();using(var checker=new UpdateChecker("",new Version("0.1.9.11"),unused,TimeSpan.FromSeconds(2),16384)) {
                 var field=typeof(UpdateChecker).GetField("client",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
                 if(field.GetValue(checker)!=null)throw new Exception("Unused client was allocated");
                 if(checker.CheckAsync(CancellationToken.None).Result.Status!=UpdateCheckStatus.NotConfigured || field.GetValue(checker)!=null)throw new Exception("Blank update source created HTTP client");
             }
             if(unused.Disposals!=1)throw new Exception("Unconsumed handler ownership was not released once");
-            Console.WriteLine("PASS 10 actual update-parser four-part version checks; fake HTTP only"); return 0;
+            Console.WriteLine("PASS 13 actual update-parser four-part version checks; fake HTTP only"); return 0;
             } catch(Exception error) { Console.WriteLine(error.GetType().FullName); Console.WriteLine(error.Message); return 1; }
         }
         private static void Test(string current,string tag,UpdateCheckStatus expected) {

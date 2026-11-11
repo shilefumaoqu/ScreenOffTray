@@ -100,7 +100,7 @@ namespace ScreenOffTray.SettingsUi
             {
                 string value;
                 if(StaticTranslations.TryGetValue(text.Text,out value))text.Text=value;
-                else if(text.Text=="版本 0.2.0 · Windows x64")text.Text="Version 0.2.0 · Windows x64";
+                else if(text.Text=="版本 0.2.1 · Windows x64")text.Text="Version 0.2.1 · Windows x64";
             }
             var control=root as ContentControl;
             if(control!=null && control.Content is string)
@@ -144,7 +144,7 @@ namespace ScreenOffTray.SettingsUi
             {"3 秒防误触","3-second guard"},{"保护期内的实体输入不会唤醒，也不会传给当前软件","Physical input during the guard neither wakes nor reaches the active app"},
             {"首次输入只负责亮屏","First input only wakes"},{"松开后再次按键或点击，才会正常操作软件","Release, then press or click again to control the app"},
             {"外观","Appearance"},{"窗口外观","Window appearance"},{"三套外观只改变设置窗口材质，选择会随设置保存","The three appearances change only this Settings window and are saved with your settings"},
-            {"几何","Geometry"},{"暖白","Warm white"},{"黑色","Black"},
+            {"浅色","Light"},{"暖白","Warm white"},{"黑色","Black"},
             {"数据与帮助","Data and help"},{"设置保存在本机","Settings stay on this PC"},{"安装版由独立后台读写；当前预览不会修改正式配置","The installed app stores settings through its local backend"},
             {"本地","Local"},{"打开使用帮助","Open help"},{"查看显示准备、播放保护与快捷键说明","Read about display preparation, playback protection and hotkeys"},{"打开","Open"},
             {"检查更新","Check for updates"},{"更改将在保存后生效","Changes take effect after saving"},{"白名单增删即时保存","Allowlist changes save immediately"},
@@ -425,25 +425,30 @@ namespace ScreenOffTray.SettingsUi
             backgroundMode=(mode??"geometry").ToLowerInvariant();
             if(backgroundMode!="geometry" && backgroundMode!="warm" && backgroundMode!="black")backgroundMode="geometry";
             bool dark=backgroundMode=="black";
-            if(GeometryLayer==null)return;
-            GeometryLayer.Visibility=backgroundMode=="geometry"?Visibility.Visible:Visibility.Collapsed;
-            if(backgroundMode=="warm")Stage.Background=MakeBrush("#E8E5DF");
-            else if(dark)Stage.Background=MakeBrush("#0D0E12");
-            else Stage.Background=new LinearGradientBrush(ParseColor("#E8EDF3"),ParseColor("#CDD8E3"),45);
+            Stage.Background=Brushes.Transparent;
             GeometryChoice.IsChecked=backgroundMode=="geometry";WarmChoice.IsChecked=backgroundMode=="warm";BlackChoice.IsChecked=backgroundMode=="black";
             if(dark)
             {
                 Resources["Text1"]=MakeBrush("#F2FFFFFF");Resources["Text2"]=MakeBrush("#A6FFFFFF");Resources["Text3"]=MakeBrush("#70FFFFFF");
-                Resources["Stroke"]=MakeBrush("#18FFFFFF");Resources["FillControl"]=MakeBrush("#12FFFFFF");Resources["FillHover"]=MakeBrush("#0FFFFFFF");
+                Resources["Stroke"]=MakeBrush("#18FFFFFF");Resources["FillControl"]=MakeBrush("#20FFFFFF");Resources["FillHover"]=MakeBrush("#18FFFFFF");
                 Resources["FillSelected"]=MakeBrush("#20FFFFFF");Resources["WarningSurface"]=MakeBrush("#2AF5A524");Resources["DangerSurface"]=MakeBrush("#28E5484D");Resources["SuccessSurface"]=MakeBrush("#2035B880");
-                Shell.Background=MakeGradient("#F0181A1E","#F0121417");SidebarSurface.Background=MakeBrush("#18FFFFFF");FooterBar.Background=MakeBrush("#E614171B");Shell.BorderBrush=MakeBrush("#22FFFFFF");
+                Shell.Background=MakeGradient("#FF181A1E","#FF121417");SidebarSurface.Background=MakeBrush("#FF24272C");FooterBar.Background=MakeBrush("#FF14171B");Shell.BorderBrush=MakeBrush("#22FFFFFF");
             }
             else
             {
                 Resources["Text1"]=MakeBrush("#EB141418");Resources["Text2"]=MakeBrush("#9E141418");Resources["Text3"]=MakeBrush("#6B141418");
-                Resources["Stroke"]=MakeBrush("#14000000");Resources["FillControl"]=MakeBrush("#80FFFFFF");Resources["FillHover"]=MakeBrush("#0C000000");
-                Resources["FillSelected"]=MakeBrush("#CFFFFFFF");Resources["WarningSurface"]=MakeBrush("#FFF8E8");Resources["DangerSurface"]=MakeBrush("#FFF0F0");Resources["SuccessSurface"]=MakeBrush("#EEF9F2");
-                Shell.Background=MakeGradient("#DCF6F7F9","#D8EDF1F5");SidebarSurface.Background=MakeBrush("#16808080");FooterBar.Background=MakeBrush("#DCF4F5F7");Shell.BorderBrush=MakeBrush("#24000000");
+                if(backgroundMode=="warm")
+                {
+                    Resources["Stroke"]=MakeBrush("#1C5B4E40");Resources["FillControl"]=MakeBrush("#FFFDFBF7");Resources["FillHover"]=MakeBrush("#0C5B4E40");
+                    Resources["FillSelected"]=MakeBrush("#FFFFFEFA");Resources["WarningSurface"]=MakeBrush("#FFF8E8");Resources["DangerSurface"]=MakeBrush("#FFF0F0");Resources["SuccessSurface"]=MakeBrush("#EEF9F2");
+                    Shell.Background=MakeGradient("#FFF7F3ED","#FFEEEAE2");SidebarSurface.Background=MakeBrush("#FFF1EDE6");FooterBar.Background=MakeBrush("#FFFAF7F2");Shell.BorderBrush=MakeBrush("#285B4E40");
+                }
+                else
+                {
+                    Resources["Stroke"]=MakeBrush("#14000000");Resources["FillControl"]=MakeBrush("#DFFFFFFF");Resources["FillHover"]=MakeBrush("#0C000000");
+                    Resources["FillSelected"]=MakeBrush("#CFFFFFFF");Resources["WarningSurface"]=MakeBrush("#FFF8E8");Resources["DangerSurface"]=MakeBrush("#FFF0F0");Resources["SuccessSurface"]=MakeBrush("#EEF9F2");
+                    Shell.Background=MakeGradient("#FFF6F7F9","#FFEDF1F5");SidebarSurface.Background=MakeBrush("#FFEDF0F3");FooterBar.Background=MakeBrush("#FFF4F5F7");Shell.BorderBrush=MakeBrush("#24000000");
+                }
             }
         }
 

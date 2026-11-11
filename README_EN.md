@@ -1,4 +1,4 @@
-> ScreenOffTray 0.2.0 moves Settings into a separate Pane-styled WPF process with Geometry, Warm white and Black appearances. Existing driver, display-off, input recovery, playback protection and display preparation behavior is retained.
+> ScreenOffTray 0.2.1 brings Settings and Setup into one Pane-inspired neutral frosted-glass language with Light, Warm white and Black appearances. Existing driver, display-off, input recovery, playback protection and display preparation behavior is retained.
 
 # ScreenOffTray
 
@@ -8,13 +8,13 @@
 
 A Windows tray utility for OLED users who want the screen off while downloads, calculations and background work continue. Turn it off immediately with a shortcut, or automatically after physical keyboard and mouse inactivity. It does not lock, sleep, hibernate or shut down Windows.
 
-**[Download the Windows x64 installer · v0.2.0](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.0)**
+**[Download the Windows x64 installer · v0.2.1](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.1)**
 
-**0.2.0** runs the Pane-styled UI in `ScreenOffTray.Settings.exe`, while the background process continues to own tray state, playback protection, hotkeys and display off. The previous `v0.1.9` and older installers remain available.
+**0.2.1** removes the reference sample's colored geometry wallpaper and the display-only backdrop, outer margin and shadow from Settings, leaving only the neutral blue-gray rounded frosted-glass window. Opaque top-level misted surfaces also remove transparent-window content ghosting. Setup uses matching light and dark misted backgrounds, glass cards and the same layered-moon mark. `ScreenOffTray.Settings.exe` still owns the window, while the background process owns tray state, playback protection, hotkeys and display off. `v0.2.0`, `v0.1.9` and older installers remain available.
 
-![English Geometry appearance using isolated demo data](docs/images/settings-en.png)
+![English Light appearance using isolated demo data](docs/images/settings-en.png)
 
-Right-click opens a small menu with status and quick actions. Settings opens a separate Pane-styled WPF window with General, Playback protection and About pages. Geometry, Warm white and Black appearances are available; Geometry is the default and the choice is saved with the other settings. Application icons come from their executable files, while the header uses the supplied layered-moon icon. Closing Settings ends only that UI process; the tray application keeps running. Ready startup remains silent. The installer continues into the same Settings host: check displays, complete preparation, and confirm readiness. Users can defer action; display off stays disabled until preparation is verified.
+Right-click opens a small menu with status and quick actions. Settings opens a separate Pane-styled WPF window with General, Playback protection and About pages. Light, Warm white and Black appearances are available; Light is the default and the choice is saved with the other settings. Application icons come from their executable files, while Settings and Setup share the supplied layered-moon mark. Closing Settings ends only that UI process; the tray application keeps running. Ready startup remains silent. The installer continues into the same Settings host: check displays, complete preparation, and confirm readiness. Users can defer action; display off stays disabled until preparation is verified.
 
 [Chinese UI](docs/images/settings-zh.png) · [Warm white](docs/images/settings-warm.png) · [Black](docs/images/settings-black.png)
 
@@ -22,7 +22,7 @@ Targets **Windows 10 22H2 / Windows 11 x64 with one physical display** and requi
 
 ## Get started
 
-1. Download `ScreenOffTray-0.2.0-Setup-x64.exe` from the Release, run it, and complete the Windows administrator prompt. Setup works offline and does not download the .NET runtime.
+1. Download `ScreenOffTray-0.2.1-Setup-x64.exe` from the Release, run it, and complete the Windows administrator prompt. Setup works offline and does not download the .NET runtime. The wizard keeps native keyboard and DPI behavior while using a neutral misted background, fine highlight edges and glass cards.
 2. On first launch, choose “Prepare and enable display off”. Preparation matches the physical display conditions and restores the layout. The display may flicker; avoid changing Windows display settings at the same time. If safe matching fails, display-off stays paused.
 3. Right-click the tray icon → Settings to change the timeout, shortcut, language and startup preference. Save applies ordinary drafts; Cancel or closing the window discards them. Whitelist edits are saved immediately. Display off is deferred while Settings is open and resumes its existing rules after closure. New users start with **10 minutes** and startup disabled.
 4. Press **Ctrl+Alt+F10**, or choose “Turn off now”. To customize the shortcut, focus its field in Settings, press a combination, release it and save.
