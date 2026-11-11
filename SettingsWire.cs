@@ -21,6 +21,7 @@ namespace ScreenOffTray.SettingsTransport
     {
         public string Path {get;set;}
         public string Name {get;set;}
+        public bool Protected {get;set;}
     }
     internal sealed class ViewState
     {
@@ -36,6 +37,7 @@ namespace ScreenOffTray.SettingsTransport
         public bool SavingWhitelist {get;set;}
         public int[] MigrationChoices {get;set;}
         public bool AudioKnown {get;set;}
+        public bool PlaybackLimitReached {get;set;}
         public string DetailZh {get;set;}
         public string DetailEn {get;set;}
         public string Diagnostics {get;set;}

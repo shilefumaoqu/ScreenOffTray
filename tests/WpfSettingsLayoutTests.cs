@@ -54,6 +54,12 @@ internal static class WpfSettingsLayoutTests
                 Check(Field<Border>(window,"FooterBar").ActualHeight>0,tag+" keeps a fixed footer");
                 Check(Field<Button>(window,"SaveButton").IsVisible && Field<Button>(window,"CancelButton").IsVisible,tag+" keeps save and cancel visible");
                 Check(Field<StackPanel>(window,"PlayingRows").Children.Count>0,tag+" renders the isolated current playback row");
+                var summary=Field<TextBlock>(window,"PlaybackSummary");
+                Check(summary.Text.Contains(english?"add an app":"加入白名单后"),tag+" does not claim an unlisted playing app is protected");
+                window.SetSources(new[]{new PlayingSource{Path=paths[0],Name="Fixture player",Protected=true}},true);
+                Check(summary.Text.Contains(english?"paused":"已暂停"),tag+" reports a backend-confirmed protected app");
+                window.SetPlaybackState(true);
+                Check(summary.Text.Contains(english?"limit reached":"上限已到"),tag+" reports that the playback limit ended protection");
 
                 foreach(string theme in new[]{"geometry","warm","black","geometry"}) {
                     window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,theme);
@@ -66,6 +72,9 @@ internal static class WpfSettingsLayoutTests
 
                 window.Close();window=null;
             }
+            window=new SettingsWindow(false,new Size(640,360));
+            Check(window.Width<=608 && window.Height<=328,"small work area caps the window instead of enforcing a larger minimum");
+            window.Close();window=null;
             File.WriteAllText(Path.Combine(output,"ready-ms.txt"),"0");
             File.AppendAllText(Path.Combine(output,"results.txt"),"Checks="+checks+"; private non-input desktop; fake data and callbacks; no hooks, APPLY, formal settings or display access."+Environment.NewLine);
         }catch(Exception ex) {

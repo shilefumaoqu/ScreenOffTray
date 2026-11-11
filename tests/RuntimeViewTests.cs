@@ -41,7 +41,7 @@ namespace ScreenOffTray.Tests
                     var export=typeof(TrayApplicationContext).GetMethod("CreateUiState",Fields);
                     var state=(ViewState)export.Invoke(root,null);
                     Check(state.Applied.Startup,"verified startup value is preserved in initial UI draft");
-                    Check(state.Version==51 && state.Sources[0].Name=="Player A","export uses one published audio version");
+                    Check(state.Version==51 && state.Sources[0].Name=="Player A" && state.Sources[0].Protected,"export uses one published audio version and backend-confirmed protection");
                     Check(state.ProtectionEn.Contains("Player A") && !state.ProtectionEn.Contains("producer changed"),"playback reason matches displayed source sample");
                     state.Whitelist[0]="mutated";state.Sources[0].Name="mutated";state.Applied.Minutes=100;
                     var again=(ViewState)export.Invoke(root,null);

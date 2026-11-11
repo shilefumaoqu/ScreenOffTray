@@ -34,7 +34,7 @@ namespace ScreenOffTray.SettingsUi
         private readonly ObservableCollection<WhitelistItem> whitelistItems=new ObservableCollection<WhitelistItem>();
         private readonly Dictionary<string,SourceRow> sourceRows=new Dictionary<string,SourceRow>(StringComparer.OrdinalIgnoreCase);
         private readonly ApplicationIcons icons;
-        private bool settingValues,closed,migrationNeeded,listBusy,viewBusy;
+        private bool settingValues,closed,migrationNeeded,listBusy,viewBusy,playbackLimitReached;
         private string migrationKey,listKey,sourcesKey,backgroundMode="geometry";
         private PlayingSource[] currentSources=new PlayingSource[0];
         private string[] appliedWhitelist=new string[0];
@@ -66,8 +66,8 @@ namespace ScreenOffTray.SettingsUi
             InitializeComponent();
             if(english)LocalizeStaticTexts(this);
             Size area=workArea??new Size(SystemParameters.WorkArea.Width,SystemParameters.WorkArea.Height);
-            double availableWidth=Math.Max(760,area.Width-32);
-            double availableHeight=Math.Max(540,area.Height-32);
+            double availableWidth=Math.Max(1,area.Width-32);
+            double availableHeight=Math.Max(1,area.Height-32);
             double width=Math.Min(1120,availableWidth);
             double height=width*5.0/7.0;
             if(height>availableHeight){height=availableHeight;width=height*7.0/5.0;}
@@ -206,7 +206,7 @@ namespace ScreenOffTray.SettingsUi
         internal void SetSources(PlayingSource[] sources,bool known)
         {
             sources=sources??new PlayingSource[0];
-            string next=(known?"known":"unknown")+"\n"+String.Join("\n",sources.Select(source=>source.Path+"\0"+source.Name));
+            string next=(known?"known":"unknown")+"\n"+String.Join("\n",sources.Select(source=>source.Path+"\0"+source.Name+"\0"+(source.Protected?"1":"0")));
             if(sourcesKey==next)return;sourcesKey=next;currentSources=sources;
             var identities=new HashSet<string>(sources.Select(source=>source.Path),StringComparer.OrdinalIgnoreCase);
             foreach(string path in sourceRows.Keys.Where(path=>!identities.Contains(path)).ToArray())
@@ -216,7 +216,11 @@ namespace ScreenOffTray.SettingsUi
             {
                 var image=new Image{Width=32,Height=32,Margin=new Thickness(0,0,12,0),Stretch=Stretch.Uniform};
                 var name=new TextBlock{Text=source.Name,FontSize=14,Foreground=(Brush)FindResource("Text1"),TextTrimming=TextTrimming.CharacterEllipsis};
-                var status=new TextBlock{Text=T("正在播放 · 自动关屏已暂停","Playing · automatic display off is paused"),FontSize=12,Foreground=(Brush)FindResource("Text2"),Margin=new Thickness(0,3,0,0)};
+                var status=new TextBlock{Text=playbackLimitReached
+                    ?T("正在播放 · 播放保护上限已到，不再暂停关屏","Playing · protection limit reached; auto off is no longer paused")
+                    :source.Protected?T("正在播放 · 自动关屏已暂停","Playing · automatic display off is paused")
+                    :T("正在播放 · 尚未加入白名单，不暂停关屏","Playing · not protected; auto off is not paused"),
+                    FontSize=12,Foreground=(Brush)FindResource("Text2"),Margin=new Thickness(0,3,0,0)};
                 var text=new StackPanel{VerticalAlignment=VerticalAlignment.Center};text.Children.Add(name);text.Children.Add(status);
                 var add=new Button{Content=T("加入","Add"),Style=(Style)FindResource("SecondaryButton"),VerticalAlignment=VerticalAlignment.Center};
                 string identity=source.Path;add.Click+=delegate{if(AddPathRequested!=null)AddPathRequested(identity);else if(WhitelistAddRequested!=null)WhitelistAddRequested();};
@@ -230,9 +234,20 @@ namespace ScreenOffTray.SettingsUi
             }
             PlaybackEmptyPanel.Visibility=sources.Length==0?Visibility.Visible:Visibility.Collapsed;
             PlaybackSummary.Text=known
-                ?(sources.Length==0?T("当前没有白名单程序播放音频","No allowlisted app is currently playing audio"):T("检测到正在播放的白名单程序，自动关屏已暂停","An allowlisted app is playing; automatic display off is paused"))
+                ?(sources.Length==0?T("当前没有程序正在播放音频","No app is currently playing audio")
+                    :playbackLimitReached?T("播放保护上限已到，不再暂停自动关屏","Protection limit reached; automatic display off is no longer paused")
+                    :sources.Any(source=>source.Protected)?T("检测到白名单程序正在播放，自动关屏已暂停","An allowlisted app is playing; automatic display off is paused")
+                    :T("检测到程序正在播放音频，加入白名单后才暂停自动关屏","Audio is playing; add an app to pause automatic display off"))
                 :T("播放状态暂不可用，自动关屏将保持暂停","Playback state is unavailable; automatic display off remains paused");
             UpdateIcons();UpdateSourceButtons();
+        }
+
+        public void SetPlaybackState(bool limitReached)
+        {
+            if(playbackLimitReached==limitReached)return;
+            playbackLimitReached=limitReached;
+            sourcesKey=null;
+            SetSources(currentSources,true);
         }
 
         public void SetStatus(string ready,string source,string caption,string protection)
@@ -244,7 +259,6 @@ namespace ScreenOffTray.SettingsUi
             bool warning=status.IndexOf("检查",StringComparison.Ordinal)>=0 || status.IndexOf("check",StringComparison.OrdinalIgnoreCase)>=0;
             SidebarStatusDot.Fill=(Brush)FindResource(success?"Success":warning?"Warning":"Text3");
             PrepareStateText.Foreground=(Brush)FindResource(success?"Success":warning?"Warning":"Text2");
-            if(!String.IsNullOrEmpty(protection))PlaybackSummary.Text=protection;
         }
 
         public void SetUpdate(string value)

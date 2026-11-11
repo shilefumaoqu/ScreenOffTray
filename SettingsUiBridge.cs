@@ -94,6 +94,8 @@ namespace ScreenOffTray
         {
             var panel=ReadPlaybackPanel();
             bool ready=_setup.HasVerifiedProfile && _displayOffSupported && _settingsFailure==null && _migrationDone;
+            string[] whitelist=panel.AppliedOptions==null || panel.AppliedOptions.WhitelistPaths==null?new string[0]:(string[])panel.AppliedOptions.WhitelistPaths.Clone();
+            bool playbackBlocks=panel.Timing.PauseReason==AutoOffPauseReason.Playback;
             string theme;
             try { theme=NormalizeTheme(Settings.Default.InterfaceTheme); }
             catch { theme="geometry"; }
@@ -112,8 +114,12 @@ namespace ScreenOffTray
                 ProtectionZh=panel.Timing.Blocked || panel.Timing.PlaybackLimitReached?AutoOffStatusText.Format(panel.Timing,_timeoutMinutes,false):"",
                 ProtectionEn=panel.Timing.Blocked || panel.Timing.PlaybackLimitReached?AutoOffStatusText.Format(panel.Timing,_timeoutMinutes,true):"",
                 AudioKnown=panel.Audio!=null && panel.Audio.Known,
-                Sources=panel.Audio==null || !panel.Audio.Known || panel.Audio.Sources==null?new PlayingSource[0]:panel.Audio.Sources.Select(s=>new PlayingSource{Path=s.ExePath,Name=s.DisplayName}).ToArray(),
-                Whitelist=(string[])panel.AppliedOptions.WhitelistPaths.Clone(),MigrationChoices=_migrationChoices==null?new int[0]:(int[])_migrationChoices.Clone(),
+                PlaybackLimitReached=panel.Timing.PlaybackLimitReached,
+                Sources=panel.Audio==null || !panel.Audio.Known || panel.Audio.Sources==null?new PlayingSource[0]:panel.Audio.Sources.Select(s=>new PlayingSource{
+                    Path=s.ExePath,Name=s.DisplayName,
+                    Protected=playbackBlocks && whitelist.Any(path=>String.Equals(path,s.ExePath,StringComparison.OrdinalIgnoreCase))
+                }).ToArray(),
+                Whitelist=whitelist,MigrationChoices=_migrationChoices==null?new int[0]:(int[])_migrationChoices.Clone(),
                 UpdateZh=UpdateText(false),UpdateEn=UpdateText(true),UpdateAvailable=_updateResult!=null && _updateResult.Status==UpdateCheckStatus.Available,
                 Applied=new FormValues{Minutes=_timeoutMinutes,Hotkey=_session.Hotkey.Serialize(),Language=_text.English?"en":"zh-CN",Startup=_startupEnabled,
                     AutomaticUpdates=_autoUpdatesEnabled,LimitEnabled=_playbackOptions.PlaybackLimitEnabled,LimitMinutes=_playbackOptions.PlaybackLimitMinutes,
