@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)'==''">Release</Configuration>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>ScreenOffTray.Settings</AssemblyName>
+    <RootNamespace>ScreenOffTray.SettingsUi</RootNamespace>
+    <StartupObject>ScreenOffTray.SettingsUi.Program</StartupObject>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <LangVersion>5</LangVersion>
+    <CodePage>65001</CodePage>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\图标\ScreenOffTray.ico</ApplicationIcon>
+    <TargetFrameworkMonikerAssemblyAttributesPath>$(MSBuildProjectDirectory)\obj\$(Configuration)\FrameworkAssemblyAttributes.cs</TargetFrameworkMonikerAssemblyAttributesPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="mscorlib"><Private>false</Private></Reference><Reference Include="System"/><Reference Include="System.Core"/>
+    <Reference Include="System.Xml"/><Reference Include="System.Drawing"/><Reference Include="System.Web.Extensions"/>
+    <Reference Include="WindowsBase"/><Reference Include="PresentationCore"/>
+    <Reference Include="PresentationFramework"/><Reference Include="System.Xaml"/>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs"/><Compile Include="SettingsClient.cs"/>
+    <Compile Include="SettingsWindow.cs"><DependentUpon>SettingsWindow.xaml</DependentUpon></Compile><Compile Include="WindowSizingPolicy.cs"/><Compile Include="ApplicationIcons.cs"/>
+    <Compile Include="..\SettingsWire.cs"/><Compile Include="..\HotkeyBinding.cs"/>
+    <Compile Include="..\Playback\AudioSourceNames.cs"/>
+    <Compile Include="..\Ui\ApplicationIconCache.cs"/>
+    <Compile Include="..\Properties\AssemblyInfo.cs"/>
+    <None Include="App.config"/>
+    <Page Include="Theme.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Page Include="SettingsWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Resource Include="Assets\app-icon.png"/>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets"/>
+</Project>

@@ -28,20 +28,24 @@ namespace ScreenOffTray.Ui
 
     internal sealed class SettingsDialog : Form
     {
-        private readonly TableLayoutPanel root, footer;
-        private readonly Panel header;
-        private readonly Label heading;
-        private readonly TableLayoutPanel stateLine, basics;
+        private readonly TableLayoutPanel root;
+        private readonly MintCardLayoutPanel footer;
+        private readonly MintGradientPanel header;
+        private readonly Label heading, subheading;
+        private readonly TableLayoutPanel stateLine;
+        private readonly MintCardLayoutPanel basics;
         private readonly Label headerStatus;
         private readonly LinkLabel recheckLink;
-        private readonly AnimatedCatControl cat;
+        private readonly StaticCatControl cat;
+        private readonly MintArtControl headerScene;
         private Icon ownedApplicationIcon;
         private Action recheck;
         private readonly MintStatusMark displayMark;
-        private readonly TableLayoutPanel footerRow;
+        private readonly MintCardLayoutPanel footerRow;
         private readonly FlowLayoutPanel versionRow, buttons;
         // Only fonts constructed by this view belong here; inherited/system fonts are borrowed.
         private readonly List<Font> ownedFonts = new List<Font>();
+        private readonly List<TableLayoutPanel> buildingTables = new List<TableLayoutPanel>();
         internal static readonly IEqualityComparer<Font> FontIdentity = new FontReferenceComparer();
         private sealed class FontReferenceComparer : IEqualityComparer<Font>
         {
@@ -50,7 +54,11 @@ namespace ScreenOffTray.Ui
         }
         private readonly Dictionary<Font,float> fontPoints = new Dictionary<Font,float>(FontIdentity);
         private readonly float fontRasterDpi;
-        private readonly UiText text;
+        private UiText text;
+        private bool changingLanguage, updateFailed;
+        private string rawError, rawUpdateDetail;
+        internal event EventHandler LanguagePreviewChanged;
+        internal bool English { get { return text.English; } }
         private readonly Func<SettingsValues, string> save;
         private readonly Action prepare, cancelPrepare, openDisplaySettings;
         private readonly Action checkUpdates, openRelease;
@@ -76,10 +84,19 @@ namespace ScreenOffTray.Ui
         private bool expanded, prepareRequested, cancelRequested, closeWhenSafe, saving, sizing, handlingClose, active;
         private float layoutScale = 1F;
         private int appliedDpi = 96;
-        private bool layoutReady, adapting, adaptationQueued, wholeWindowScroll;
+        private bool layoutReady, adapting, wholeWindowScroll;
+        private int presentationDepth;
+        private bool setupShown, setupExpanded, setupRunning, releaseShown;
         private Rectangle lastWorkArea;
+        [Flags] private enum LayoutReason { None = 0, Width = 1, Height = 2, Content = 4, Dpi = 8, WorkArea = 16 }
+        private LayoutReason pendingLayout;
+        private bool layoutQueued, interactiveSizing, finalLayoutPending, finishingLayout, layoutStopped;
+        private bool interactiveRootSuspended;
+        private int layoutGeneration, measuredWidth = -1, measuredBody, measuredFooter, errorVersion, scrollErrorVersion;
+        private string measuredBodyKey;
+        private Size arrangedClientSize, arrangedViewportSize, moveStartSize;
 
-        internal SettingsDialog(UiText text, SettingsValues current, Func<SettingsValues, string> save,
+        internal SettingsDialog(UiText initialText, SettingsValues current, Func<SettingsValues, string> save,
             Action prepare, Action cancelPrepare, Action openDisplaySettings,
             Action checkUpdates = null, Action openRelease = null, string version = null,
             Func<PlaybackPanelState> readPlayback = null, Action refreshAudio = null,
@@ -91,75 +108,85 @@ namespace ScreenOffTray.Ui
             AutoScaleMode = AutoScaleMode.None;
             fontRasterDpi = GetDpiForSystem();
             if (fontRasterDpi <= 0) fontRasterDpi = 96;
-            this.text = text; this.save = save; this.prepare = prepare;
+            this.text = initialText; this.save = save; this.prepare = prepare;
             this.cancelPrepare = cancelPrepare; this.openDisplaySettings = openDisplaySettings;
             this.checkUpdates = checkUpdates; this.openRelease = openRelease;
             this.readPlayback = readPlayback;
             Text = text.Pick("ScreenOffTray · 设置", "ScreenOffTray · Settings");
-            Font = OwnFont(new Font(text.English ? "Segoe UI" : "Microsoft YaHei UI", 11F));
-            BackColor = MintTheme.Paper; ForeColor = MintTheme.Ink;
+            Font = OwnFont(new Font(text.English ? "Segoe UI" : "Microsoft YaHei UI",15.5F));
+            BackColor = MintTheme.Page; ForeColor = MintTheme.Ink;
             AutoScaleDimensions = new SizeF(96, 96);
             FormBorderStyle = FormBorderStyle.Sizable; ShowInTaskbar = true;
             MinimizeBox = MaximizeBox = true;
-            StartPosition = FormStartPosition.CenterScreen; ClientSize = new Size(718, 480);
+            StartPosition = FormStartPosition.CenterScreen; ClientSize = new Size(984, text.English ? 720 : 654);
             MinimumSize = new Size(300, 300);
             AccessibleDescription = text.Pick("编辑期间暂缓自动关屏；关闭设置后继续在托盘运行。", "Auto off is on hold while editing. Closing settings keeps the app in the tray.");
-            root = Table("settings-window", 1); root.AutoSize = false; root.Dock = DockStyle.Fill;
+            root = Table("settings-window", 1); root.AutoSize = false; root.Dock = DockStyle.Fill; root.BackColor = MintTheme.Page;
             root.RowCount = 3; root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             Controls.Add(root);
-            header = new Panel { Name = "header", Dock = DockStyle.Top, Height = 64, Margin = new Padding(0), BackColor = MintTheme.Header };
-            heading = Paragraph("heading", text.Pick("设置", "Settings")); heading.Dock = DockStyle.None;
-            heading.Font = OwnFont(new Font(Font.FontFamily, 21F, FontStyle.Bold)); heading.Margin = new Padding(0);
-            header.Controls.Add(heading);
+            header = new MintGradientPanel { Name = "header", Dock = DockStyle.Top, Height = 116, Margin = new Padding(0), BackColor = MintTheme.Header };
+            // Panel does not repaint its old bottom rule when its height changes.
+            // Repaint this header and transparent children only on actual resize.
+            header.SizeChanged += delegate { header.Invalidate(true); };
+            heading = Paragraph("heading", "ScreenOffTray"); heading.Dock = DockStyle.None;
+            heading.Font = OwnFont(new Font(Font.FontFamily, 24F, FontStyle.Bold)); heading.Margin = new Padding(0); heading.BackColor = Color.Transparent;
+            subheading = Paragraph("subheading", text.Pick("设置", "Settings")); subheading.Dock = DockStyle.None;
+            subheading.Font = OwnFont(new Font(Font.FontFamily,16F)); subheading.ForeColor = MintTheme.Muted; subheading.Margin = new Padding(0); subheading.BackColor = Color.Transparent;
+            // Hidden controls keep the borrowed title fonts inside the DPI
+            // rescaling walk; the gradient header paints the visible text.
+            heading.Visible = false; subheading.Visible = false;
+            header.Controls.Add(heading); header.Controls.Add(subheading);
+            header.Title = heading.Text; header.Subtitle = subheading.Text;
+            header.TitleFont = heading.Font; header.SubtitleFont = subheading.Font; header.SubtitleColor = subheading.ForeColor;
             stateLine = Table("display-state-line", 3); stateLine.Dock = DockStyle.None;
-            stateLine.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 26)); stateLine.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); stateLine.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            displayMark = new MintStatusMark { Name = "display-mark", Size = new Size(24,24), Margin = new Padding(0), TabStop = false };
-            headerStatus = Paragraph("display-status", ""); headerStatus.ForeColor = MintTheme.Ink; headerStatus.Margin = new Padding(0,2,0,0);
+            stateLine.BackColor = Color.Transparent;
+            stateLine.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38)); stateLine.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); stateLine.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            displayMark = new MintStatusMark { Name = "display-mark", Size = new Size(32,32), Margin = new Padding(0), TabStop = false };
+            headerStatus = Paragraph("display-status", ""); headerStatus.ForeColor = MintTheme.Ink; headerStatus.Margin = new Padding(0,2,0,0); headerStatus.BackColor = Color.Transparent;
             recheckLink = new LinkLabel { Name = "recheck", AutoSize = true, Text = text.Pick("检查", "Check"), Margin = new Padding(8,2,0,0) }; StyleLink(recheckLink);
+            recheckLink.BackColor = Color.Transparent;
             stateLine.Controls.Add(displayMark,0,0); stateLine.Controls.Add(headerStatus,1,0); stateLine.Controls.Add(recheckLink,2,0); header.Controls.Add(stateLine);
-            cat = new AnimatedCatControl { English = text.English, Name = "mint-cat", Size = new Size(162,60), Margin = new Padding(0) };
+            cat = new StaticCatControl { English = text.English, Name = "mint-cat", Size = new Size(76,76), Margin = new Padding(0) };
             cat.Visible = !SystemInformation.HighContrast; header.Controls.Add(cat);
-            header.Paint += delegate(object sender,PaintEventArgs e) { DrawRule(e.Graphics,header,false); };
+            headerScene = new MintArtControl("ScreenOffTray.Ui.Resources.theme.header-scene.png") { Name="header-scene", Margin=new Padding(0), TabStop=false };
+            headerScene.Visible = !SystemInformation.HighContrast; header.Controls.Add(headerScene);
             root.Controls.Add(header,0,0);
-            viewport = new Panel { Name = "viewport", Dock = DockStyle.Fill, AutoScroll = true, Margin = new Padding(0), TabStop = false };
-            content = Table("content", 1); content.Dock = DockStyle.Top; content.Padding = new Padding(18,16,18,16);
+            viewport = new Panel { Name = "viewport", Dock = DockStyle.Fill, AutoScroll = true, Margin = new Padding(0), TabStop = false, BackColor = MintTheme.Page };
+            content = Table("content", 1); content.AutoSize = false; content.Dock = DockStyle.Top; content.Padding = new Padding(14,14,14,14); content.BackColor = MintTheme.Page;
             viewport.Controls.Add(content); root.Controls.Add(viewport, 0, 1);
-            configuration = Table("configuration",2); configuration.Dock = DockStyle.Top; configuration.TabIndex = 1;
-            configuration.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,49.14F)); configuration.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50.86F));
-            basics = Table("basic-settings",1); basics.Dock = DockStyle.Top; basics.Margin = new Padding(0,0,18,0);
-            var basicTitle = Paragraph("basic-title",text.Pick("基础设置", "Basic settings"));
-            basicTitle.Font = OwnFont(new Font(Font.FontFamily,14.25F,FontStyle.Bold)); basicTitle.Margin = new Padding(0,0,0,16); basics.Controls.Add(basicTitle,0,0);
-            var timeoutLine = Table("timeout-line",2); timeoutLine.Dock = DockStyle.Top; timeoutLine.Padding = new Padding(0,0,0,16); timeoutLine.Margin = new Padding(0,0,0,15);
+            configuration = Table("configuration",2); configuration.Dock = DockStyle.Top; configuration.TabIndex = 1; configuration.BackColor = MintTheme.Page;
+            configuration.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,47.2F)); configuration.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,52.8F));
+            basics = new MintCardLayoutPanel(1) { Name="basic-settings", AutoSize=true, AutoSizeMode=AutoSizeMode.GrowAndShrink, Dock=DockStyle.Fill, Margin=new Padding(0,0,6,0), Padding=new Padding(24) };
+            basics.SuspendLayout(); buildingTables.Add(basics); basics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+            basics.ArtResource = "ScreenOffTray.Ui.Resources.theme.card-left-scene.png";
+            var basicTitle = new MintIconLabel { Name="basic-title", Text=text.Pick("基础设置", "Basic settings"), IconKind=MintIconKind.Paw, AutoSize=true, Margin=new Padding(0,0,0,20) };
+            basicTitle.Font = OwnFont(new Font(Font.FontFamily,18F,FontStyle.Bold)); basics.Controls.Add(basicTitle,0,0);
+            var timeoutLine = Table("timeout-line",2); timeoutLine.Dock = DockStyle.Top; timeoutLine.Padding = new Padding(0,0,0,11); timeoutLine.Margin = new Padding(0,0,0,12);
             timeoutLine.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); timeoutLine.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            var idleLabel = Paragraph("timeout-label",text.Pick("空闲关屏", "Idle timeout")); idleLabel.Margin = new Padding(0,9,0,0);
+            var idleLabel = new MintIconLabel { Name="timeout-label", Text=text.Pick("空闲关屏", "Idle time"), IconKind=MintIconKind.Display, AutoSize=true, Margin=new Padding(0,5,0,0) };
             timeoutLine.Controls.Add(idleLabel,0,0);
-            timeout = new MintNumberBox { Name = "timeout", Value = Math.Max(1,Math.Min(1440,current.TimeoutMinutes)), AccessibleName = text.Pick("空闲关屏分钟数，1至1440", "Idle timeout in minutes, 1 to 1440") };
-            var timeoutRow = new FlowLayoutPanel { Name = "timeout-row", AutoSize = true, WrapContents = false, Margin = new Padding(0) };
-            timeoutRow.Controls.Add(new MintStepper(timeout)); timeoutRow.Controls.Add(new Label { Text = text.Pick("分钟", "min"), AutoSize = true, Margin = new Padding(12,9,0,0) });
+            timeout = new MintNumberBox { Font = OwnFont(new Font(Font.FontFamily,20F)), Name = "timeout", Value = Math.Max(1,Math.Min(1440,current.TimeoutMinutes)), AccessibleName = text.Pick("空闲关屏分钟数，1至1440", "Idle timeout in minutes, 1 to 1440") };
+            var timeoutRow = new FlowLayoutPanel { Name = "timeout-row", BackColor=Color.Transparent, AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+            timeoutRow.Controls.Add(new MintStepper(timeout)); timeoutRow.Controls.Add(new MintLabel { Name="timeout-unit", Text = text.Pick("分钟", "min"), AutoSize = true, Margin = new Padding(8,9,0,0) });
             timeoutLine.Controls.Add(timeoutRow,1,0); basics.Controls.Add(timeoutLine,0,1);
-            timeoutLine.Paint += delegate(object sender,PaintEventArgs e) { DrawRule(e.Graphics,timeoutLine,false); };
+            // The reference has open spacing between settings, without separator rules.
             var fields = Table("basic-fields",3); fields.Dock = DockStyle.Top;
-            fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,text.English ? 82 : 80)); fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); fields.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            hotkey = new HotkeyCaptureBox { Name = "hotkey", Dock = DockStyle.Fill, AccessibleName = text.Pick("关屏快捷键，按组合键录入", "Display-off shortcut, press a key combination") };
+            fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,78)); fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); fields.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            hotkey = new HotkeyCaptureBox { Font = OwnFont(new Font(Font.FontFamily,14F)), Name = "hotkey", Dock = DockStyle.Fill, AccessibleName = text.Pick("关屏快捷键，按组合键录入", "Display-off shortcut, press a key combination") };
             hotkey.SetBinding(current.Hotkey ?? HotkeyBinding.Default);
-            AddField(fields,0,text.Pick("快捷键", "Shortcut"), new InputFrame(hotkey) { Dock = DockStyle.Fill });
-            defaults = Button("defaults",text.Pick("恢复默认", "Reset"),1); defaults.MinimumSize = new Size(95,39); defaults.Padding = new Padding(4,2,4,2); defaults.Margin = new Padding(10,0,0,16); fields.Controls.Add(defaults,2,0);
-            language = new MintComboBox { Name = "language", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, FlatStyle = FlatStyle.Standard, TabIndex = 2, AccessibleName = text.Pick("界面语言", "Language") };
+            AddField(fields,0,text.Pick("快捷键", "Shortcut"), new InputFrame(hotkey) { Dock = DockStyle.Fill },MintIconKind.Keyboard);
+            defaults = Button("defaults",text.Pick("恢复默认", "Reset"),1); defaults.Font = OwnFont(new Font(Font.FontFamily,14F)); defaults.MinimumSize = new Size(92,39); defaults.Padding = new Padding(4,2,4,2); defaults.Margin = new Padding(8,0,0,16); fields.Controls.Add(defaults,2,0);
+            language = new MintComboBox { Font = OwnFont(new Font(Font.FontFamily,16F)), Name = "language", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, FlatStyle = FlatStyle.Standard, TabIndex = 2, AccessibleName = text.Pick("界面语言", "Language") };
             language.Items.AddRange(new object[] { "简体中文", "English" }); language.SelectedIndex = current.Language == "en" ? 1 : 0;
-            AddField(fields,1,text.Pick("语言", "Language"),language); fields.SetColumnSpan(language,2); basics.Controls.Add(fields,0,2);
-            startup = new MintCheckBox { Name = "startup", Text = text.Pick("开机启动", "Start with Windows"), Checked = current.Startup, AutoSize = true, TabIndex = 3, Margin = new Padding(0,4,0,4) };
-            automaticUpdates = new MintCheckBox { Name = "automatic-updates", Text = text.Pick("自动检查更新", "Check for updates automatically"), Checked = current.AutomaticUpdateChecks, AutoSize = true, TabIndex = 4, Margin = new Padding(0,4,0,4) };
+            AddField(fields,1,text.Pick("语言", "Language"),language,MintIconKind.Language); fields.SetColumnSpan(language,2); basics.Controls.Add(fields,0,2);
+            startup = new MintCheckBox { Font = OwnFont(new Font(Font.FontFamily,16F)), Name = "startup", MinimumSize = new Size(0,42), Text = text.Pick("开机启动", "Start with Windows"), Checked = current.Startup, AutoSize = true, TabIndex = 3, Margin = new Padding(0) };
+            automaticUpdates = new MintCheckBox { Font = OwnFont(new Font(Font.FontFamily,16F)), Name = "automatic-updates", MinimumSize = new Size(0,42), Text = text.Pick("自动检查更新", "Auto-check updates"), Checked = current.AutomaticUpdateChecks, AutoSize = true, TabIndex = 4, Margin = new Padding(0) };
             basics.Controls.Add(startup,0,3); basics.Controls.Add(automaticUpdates,0,4);
             updateHint = Paragraph("update-hint", ""); updateHint.Visible = false; basics.Controls.Add(updateHint,0,5);
-            playbackPanel = new PlaybackSettingsPanel(text,current.PlaybackLimitEnabled,current.PlaybackLimitMinutes,refreshAudio,saveWhitelist) { Dock = DockStyle.Top, TabIndex = 1, Margin = new Padding(18,0,0,0) };
+            playbackPanel = new PlaybackSettingsPanel(text,current.PlaybackLimitEnabled,current.PlaybackLimitMinutes,refreshAudio,saveWhitelist) { Dock = DockStyle.Fill, TabIndex = 1, Margin = new Padding(6,0,0,0), Padding = new Padding(24) };
+            playbackPanel.ArtResource = "ScreenOffTray.Ui.Resources.theme.card-right-scene.png";
             configuration.Controls.Add(basics,0,0); configuration.Controls.Add(playbackPanel,1,0); content.Controls.Add(configuration,0,1);
-            configuration.Paint += delegate(object sender,PaintEventArgs e) {
-                using (var pen = new Pen(MintTheme.Line)) {
-                    if (configuration.ColumnCount == 2) { int x = playbackPanel.Left-(int)Math.Round(18*layoutScale); e.Graphics.DrawLine(pen,x,0,x,configuration.Height-1); }
-                    else { int y = playbackPanel.Top-(int)Math.Round(17*layoutScale); e.Graphics.DrawLine(pen,0,y,configuration.Width-1,y); }
-                }
-            };
             error = Paragraph("error", ""); error.Visible = false; error.ForeColor = SystemInformation.HighContrast ? SystemColors.ControlText : Color.FromArgb(162,59,53); error.AccessibleRole = AccessibleRole.Alert;
             content.Controls.Add(error,0,2);
 
@@ -177,25 +204,34 @@ namespace ScreenOffTray.Ui
             releasePage = new LinkLabel { Name = "release-page", Text = text.Pick("前往 GitHub 下载", "Download on GitHub"), AutoSize = true, Visible = false }; StyleLink(releasePage);
             updateSection.Controls.Add(updateDetail,0,0); updateSection.Controls.Add(releasePage,0,1); content.Controls.Add(updateSection,0,3);
 
-            footer = Table("footer",1); footer.Dock = DockStyle.Top; footer.Padding = new Padding(18,14,18,16);
-            footer.Paint += delegate(object sender,PaintEventArgs e) {
-                using (var pen = new Pen(MintTheme.Line)) e.Graphics.DrawLine(pen,footer.Padding.Left,0,footer.Width-footer.Padding.Right,0);
-            };
-            footerRow = Table("footer-row",2); footerRow.Dock = DockStyle.Top; footerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); footerRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            footer = new MintCardLayoutPanel(1) { Name="footer", AutoSize=true, AutoSizeMode=AutoSizeMode.GrowAndShrink, Dock=DockStyle.Top,
+                Margin=new Padding(14,6,14,12), Padding=new Padding(15,12,15,12) };
+            footer.SuspendLayout(); buildingTables.Add(footer); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+            footerRow = new MintCardLayoutPanel(3) { Name="footer-row", AutoSize=true, AutoSizeMode=AutoSizeMode.GrowAndShrink,
+                Dock=DockStyle.Top, Margin=new Padding(0), RoundedSurface=false, BackColor=Color.Transparent,
+                ArtResource="ScreenOffTray.Ui.Resources.theme.footer-flowers.png" };
+            footerRow.SuspendLayout(); buildingTables.Add(footerRow);
+            footerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,55)); footerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,12));
+            footerRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             var footerCopy = Table("footer-copy",1); footerCopy.Dock = DockStyle.Fill; footerCopy.Margin = new Padding(0,0,12,0);
-            var behavior = Paragraph("behavior",text.Pick("关屏后 3 秒防误触，首次实体输入只亮屏。", "3-second guard; first physical key or click only wakes the display."));
-            behavior.Font = OwnFont(new Font(Font.FontFamily,9.75F)); behavior.ForeColor = SecondaryText; behavior.Margin = new Padding(0,0,0,6); footerCopy.Controls.Add(behavior,0,0);
-            versionRow = new FlowLayoutPanel { Name = "version-row", AutoSize = true, Dock = DockStyle.Top, WrapContents = true, Margin = new Padding(0) };
-            var versionLabel = Paragraph("version", "v" + (version ?? Application.ProductVersion)); versionLabel.ForeColor = SecondaryText; versionLabel.Font = OwnFont(new Font(Font.FontFamily,9.75F)); versionLabel.Margin = new Padding(0,0,18,0);
-            updateCheck = new LinkLabel { Name = "check-updates", AutoSize = true, Font = OwnFont(new Font(Font.FontFamily,9.75F)), Text = text.Pick("检查更新", "Check updates"), Margin = new Padding(0) }; StyleLink(updateCheck);
+            var behavior = Paragraph("behavior",text.Pick("关屏后保护 3 秒，首次实体按键或点击只亮屏。", "3-second guard; first physical key or click only wakes the display."));
+            behavior.Font = OwnFont(new Font(Font.FontFamily,14F)); behavior.ForeColor = SecondaryText; behavior.Margin = new Padding(0);
+            var feedback = Table("feedback-line",2); feedback.Dock = DockStyle.Top; feedback.Margin = new Padding(0,0,0,6);
+            feedback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,38)); feedback.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+            feedback.Controls.Add(new MintInfoMark { Name = "feedback-info", Size = new Size(26,26), Margin = new Padding(0,2,10,0), TabStop = false },0,0);
+            feedback.Controls.Add(behavior,1,0); footerCopy.Controls.Add(feedback,0,0);
+            versionRow = new FlowLayoutPanel { Name = "version-row", BackColor=Color.Transparent, AutoSize = true, Dock = DockStyle.Top, WrapContents = true, Margin = new Padding(0) };
+            var versionLabel = Paragraph("version", "v" + (version ?? Application.ProductVersion)); versionLabel.ForeColor = SecondaryText; versionLabel.Font = OwnFont(new Font(Font.FontFamily,14F)); versionLabel.Margin = new Padding(0,0,18,0);
+            updateCheck = new LinkLabel { Name = "check-updates", AutoSize = true, Font = OwnFont(new Font(Font.FontFamily,14F)), Text = text.Pick("检查更新", "Check updates"), Margin = new Padding(0) }; StyleLink(updateCheck);
             versionRow.Controls.AddRange(new Control[] { versionLabel,updateCheck }); footerCopy.Controls.Add(versionRow,0,1); footerRow.Controls.Add(footerCopy,0,0);
-            buttons = new FlowLayoutPanel { Name = "buttons", FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Margin = new Padding(0), TabIndex = 1, Anchor = AnchorStyles.Right };
+            buttons = new FlowLayoutPanel { Name = "buttons", BackColor = Color.Transparent, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Margin = new Padding(0), TabIndex = 1, Anchor = AnchorStyles.Right };
             cancelButton = Button("cancel",text.Pick("取消", "Cancel"),0); saveButton = Button("save",text.Pick("保存", "Save"),1); StylePrimaryButton(saveButton);
-            cancelButton.MinimumSize = new Size(100,39); saveButton.MinimumSize = new Size(106,39); cancelButton.Margin = new Padding(0,0,11,0); saveButton.Margin = new Padding(0);
-            buttons.Controls.AddRange(new Control[] { cancelButton,saveButton }); footerRow.Controls.Add(buttons,1,0); footer.Controls.Add(footerRow,0,0); root.Controls.Add(footer,0,2);
+            var saveSurface = saveButton as SurfaceButton; if (saveSurface != null) saveSurface.Symbol = 4;
+            cancelButton.Font = saveButton.Font = OwnFont(new Font(Font.FontFamily,16F)); cancelButton.MinimumSize = new Size(140,54); saveButton.MinimumSize = new Size(158,54); cancelButton.Margin = new Padding(0,0,16,0); saveButton.Margin = new Padding(0);
+            buttons.Controls.AddRange(new Control[] { cancelButton,saveButton }); footerRow.Controls.Add(buttons,2,0); footer.Controls.Add(footerRow,0,0); root.Controls.Add(footer,0,2);
             AcceptButton = saveButton; CancelButton = cancelButton; cancelButton.DialogResult = DialogResult.None;
             defaults.Click += delegate { hotkey.SetBinding(HotkeyBinding.Default); SetError(""); };
-            hotkey.BindingChanged += delegate { SetError(Localize(hotkey.Error)); };
+            hotkey.BindingChanged += delegate { SetError(hotkey.Error); };
             hotkey.GestureReleased += delegate { if (hotkey.Focused && hotkey.Error == null) defaults.Focus(); };
             saveButton.Click += delegate { SaveValues(); }; cancelButton.Click += delegate { RequestClose(); };
             recheckLink.LinkClicked += delegate { if (!setup.Checking && !Running) InvokeAction(recheck); };
@@ -209,19 +245,103 @@ namespace ScreenOffTray.Ui
             VisibleChanged += delegate { playbackTimer.Enabled = Visible && this.readPlayback != null; if (playbackTimer.Enabled) RefreshPlayback(); };
             FormClosing += ClosingDialog; Activated += delegate { active = true; };
             Deactivate += delegate { active = false; };
-            content.Layout += delegate { FitHeight(); }; viewport.SizeChanged += delegate { FitHeight(); };
-            ClientSizeChanged += delegate { if(layoutReady) FitHeight(); };
+            content.Layout += ContentLayoutChanged;
+            // configuration has a measured fixed row height. Genuine card changes
+            // must invalidate that measure, while geometry committed by our own
+            // sizing transaction must not feed back into another full layout.
+            basics.Layout += CardContentLayoutChanged;
+            playbackPanel.Layout += CardContentLayoutChanged;
+            // Record geometry even during a presentation transaction. RequestLayout
+            // defers the work; dropping the notification here can lose a real resize.
+            viewport.SizeChanged += delegate {
+                int width = Math.Max(1,viewport.ClientSize.Width);
+                bool narrow = width < Units(840);
+                // Scrollbar- and dock-induced feedback after a coordinated commit is
+                // already represented by content width and topology.
+                if (content.Width == width && (configuration.ColumnCount == 1) == narrow) return;
+                RequestLayout(SizeReasons());
+            };
+            ClientSizeChanged += delegate { RequestLayout(SizeReasons()); };
             Load += delegate {
                 // Manual positioning belongs to the caller (including isolated test desktops).
                 if (StartPosition == FormStartPosition.CenterScreen) {
                     AdaptToCurrentWorkArea(true);
                 }
             };
-            Shown += delegate { timeout.Focus(); FitHeight(); };
+            Shown += delegate { saveButton.Focus(); };
             UpdatePreferenceHint(); ApplySetup();
+            for (int i = buildingTables.Count - 1; i >= 0; i--) buildingTables[i].ResumeLayout(true);
+            buildingTables.Clear();
             layoutReady = true;
             ApplyWindowDpi((int)GetDpiForWindow(Handle));
             ResumeLayout(true);
+            CompleteLayout(true);
+            language.SelectedIndexChanged += delegate { PreviewLanguage(); };
+        }
+
+        private void Caption(string name,string zh,string en)
+        {
+            Control[] matches=Controls.Find(name,true);
+            if(matches.Length!=0) matches[0].Text=text.Pick(zh,en);
+        }
+        private void PreviewLanguage()
+        {
+            if(changingLanguage || !layoutReady || IsDisposed || language.SelectedIndex<0) return;
+            bool english=language.SelectedIndex==1;
+            if(text.English==english) return;
+            if(Running || closeWhenSafe || saving) {
+                changingLanguage=true;
+                try { language.SelectedIndex=text.English ? 1 : 0; }
+                finally { changingLanguage=false; }
+                return;
+            }
+            using(SettingsDpiContext.EnterUi()) {
+                changingLanguage=true;
+                bool defaultHeight=Math.Abs(ClientSize.Height-Units(text.English ? 720 : 654))<=Units(2);
+                BeginPresentation(); SuspendLayoutTree(this);
+                try {
+                    text=new UiText(english ? "en" : "zh-CN");
+                    string family=english ? "Segoe UI" : "Microsoft YaHei UI";
+                    RescaleOwnedFonts(this,ownedFonts,fontPoints,appliedDpi,fontRasterDpi,family);
+                    Text=text.Pick("ScreenOffTray · 设置","ScreenOffTray · Settings");
+                    subheading.Text=text.Pick("设置","Settings");cat.English=english;
+                    AccessibleDescription=text.Pick("编辑期间暂缓自动关屏；关闭设置后继续在托盘运行。","Auto off is on hold while editing. Closing settings keeps the app in the tray.");
+                    Caption("basic-title","基础设置","Basic settings");
+                    Caption("timeout-label","空闲关屏","Idle time");
+                    Caption("timeout-unit","分钟","min");
+                    Caption("hotkey-frame-label","快捷键","Shortcut");
+                    Caption("defaults","恢复默认","Reset");
+                    Caption("language-label","语言","Language");
+                    Caption("startup","开机启动","Start with Windows");
+                    Caption("automatic-updates","自动检查更新","Auto-check updates");
+                    Caption("behavior","关屏后保护 3 秒，首次实体按键或点击只亮屏。","3-second guard; first physical key or click only wakes the display.");
+                    Caption("cancel-prepare","取消准备","Cancel setup");
+                    Caption("display-settings","高级：Windows 显示设置","Advanced: Windows display settings");
+                    Caption("release-page","前往 GitHub 下载","Download on GitHub");
+                    Caption("save","保存","Save");
+                    language.AccessibleName=text.Pick("界面语言","Language");
+                    hotkey.AccessibleName=text.Pick("关屏快捷键，按组合键录入","Display-off shortcut, press a key combination");
+                    timeout.AccessibleName=text.Pick("空闲关屏分钟数，1至1440","Idle timeout in minutes, 1 to 1440");
+                    timeout.Parent.Controls["timeout-minus"].AccessibleName="− "+timeout.AccessibleName;
+                    timeout.Parent.Controls["timeout-plus"].AccessibleName="+ "+timeout.AccessibleName;
+                    playbackPanel.ApplyLanguage(text,appliedDpi,fontRasterDpi);
+                    UpdatePreferenceHint();ApplySetup();
+                    RefreshUpdate(checkingUpdates,rawUpdateDetail,releaseShown,updateFailed);
+                    SetError(rawError);
+                    if(defaultHeight && WindowState==FormWindowState.Normal) {
+                        ClientSize=new Size(ClientSize.Width,Units(english ? 720 : 654));
+                        AdaptToCurrentWorkArea(false);
+                    }
+                    // Re-read cached setup/update presentation in the host's DPI
+                    // context. This event never requests display or audio work.
+                    EventHandler changed=LanguagePreviewChanged;
+                    if(changed!=null) InvokeAction(delegate { changed(this,EventArgs.Empty); });
+                } finally {
+                    try { ResumeLayoutTree(this); }
+                    finally { changingLanguage=false;EndPresentation(true); }
+                }
+                RequestLayout(LayoutReason.Content);CompleteLayout(true);
+            }
         }
 
         internal void RefreshPlayback()
@@ -230,12 +350,43 @@ namespace ScreenOffTray.Ui
             if (IsDisposed || readPlayback == null) return;
             try { playbackPanel.RefreshState(readPlayback()); }
             catch (Exception ex) { playbackPanel.ShowReadError(ex.Message); }
-            FitHeight();
+            // Text/visibility/list changes propagate through content.Layout.
+            // An identical timer snapshot must not force a whole-page layout.
             }
+        }
+
+        protected override void SetVisibleCore(bool value)
+        {
+            if (!value || !layoutReady) { base.SetVisibleCore(value); return; }
+            // Native child creation, initial playback and Combo DPI repair all
+            // belong to one first-show layout, not one full Fit per child.
+            presentationDepth++;
+            SuspendLayoutTree(this);
+            try { base.SetVisibleCore(value); }
+            finally {
+                try { ResumeLayoutTree(this); }
+                finally { presentationDepth--; }
+            }
+            RequestLayout(LayoutReason.Content);
+            CompleteLayout(true);
+        }
+        private static void SuspendLayoutTree(Control control)
+        {
+            control.SuspendLayout();
+            foreach (Control child in control.Controls) SuspendLayoutTree(child);
+        }
+        private static void ResumeLayoutTree(Control control)
+        {
+            foreach (Control child in control.Controls) ResumeLayoutTree(child);
+            control.ResumeLayout(true);
         }
 
         protected override void Dispose(bool disposing)
         {
+            if (disposing) {
+                layoutStopped = true; layoutGeneration++; layoutQueued = false; pendingLayout = LayoutReason.None;
+                ResumeInteractiveRoot(false);
+            }
             if (disposing && playbackTimer != null) { playbackTimer.Stop(); playbackTimer.Dispose(); }
             base.Dispose(disposing);
             if (disposing) {
@@ -246,16 +397,17 @@ namespace ScreenOffTray.Ui
             }
         }
 
-        private static TableLayoutPanel Table(string name, int columns)
+        private TableLayoutPanel Table(string name, int columns)
         {
             var table = new TableLayoutPanel { Name = name, ColumnCount = columns, AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink, Margin = new Padding(0), Padding = new Padding(0), TabStop = false };
+                AutoSizeMode = AutoSizeMode.GrowAndShrink, Margin = new Padding(0), Padding = new Padding(0), BackColor = Color.Transparent, TabStop = false };
+            table.SuspendLayout(); buildingTables.Add(table);
             if (columns == 1) table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             return table;
         }
         private static Label Paragraph(string name, string value)
         {
-            return new Label { Name = name, Text = value, AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(0, 3, 0, 3) };
+            return new MintLabel { Name = name, Text = value, AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(0, 3, 0, 3) };
         }
         private static Button Button(string name, string value, int tab)
         {
@@ -279,9 +431,9 @@ namespace ScreenOffTray.Ui
             var surface = button as SurfaceButton;
             if (surface != null) surface.Primary = true;
         }
-        private static void AddField(TableLayoutPanel table, int row, string label, Control control)
+        private static void AddField(TableLayoutPanel table, int row, string label, Control control, MintIconKind icon = MintIconKind.None)
         {
-            table.Controls.Add(new Label { Name = control.Name+"-label", Text = label, AutoSize = true, Margin = new Padding(0, 9, 8, 0), TabIndex = control.TabIndex }, 0, row);
+            table.Controls.Add(new MintIconLabel { Name = control.Name+"-label", Text = label, IconKind=icon, AutoSize = true, Margin = new Padding(0, 4, 8, 0), TabIndex = control.TabIndex }, 0, row);
             control.Margin = new Padding(0, 0, 0, 16); table.Controls.Add(control, 1, row);
         }
         internal void ConfigureWindow(Action recheck, Icon applicationIcon = null)
@@ -308,12 +460,20 @@ namespace ScreenOffTray.Ui
             return base.ProcessCmdKey(ref msg,keyData);
         }
         private Font OwnFont(Font font) { ownedFonts.Add(font); fontPoints.Add(font,font.Size); return font; }
-        internal static void RescaleOwnedFonts(Control view, List<Font> owned, Dictionary<Font,float> points, float factor)
+        internal static void RescaleOwnedFonts(Control view, List<Font> owned, Dictionary<Font,float> points, int dpi, float rasterDpi,string family=null)
         {
+            var nativeFonts = new HashSet<Font>(FontIdentity);
+            CollectNativeFonts(view,nativeFonts);
             var replacements = new Dictionary<Font,Font>(FontIdentity);
             foreach (Font font in owned) {
-                float size = points[font] * factor;
-                if (Math.Abs(font.Size-size) > .01F) replacements.Add(font,new Font(font.FontFamily,size,font.Style,font.Unit));
+                bool native = nativeFonts.Contains(font);
+                float size = points[font] * (native ? dpi/72F : dpi/rasterDpi);
+                GraphicsUnit unit = native ? GraphicsUnit.Pixel : GraphicsUnit.Point;
+                // Framework 4.8 can cache the native point-font DC at the host's
+                // initial 96 DPI. Pixel fonts give native HFONT and GDI painting
+                // the same explicit window size regardless of cache order.
+                if (font.Unit != unit || Math.Abs(font.Size-size) > .01F || (!String.IsNullOrEmpty(family) && font.FontFamily.Name!=family))
+                    replacements.Add(font,new Font(family ?? font.FontFamily.Name,size,font.Style,unit));
             }
             if (replacements.Count == 0) return;
             var assignments = new Dictionary<Control,Font>();
@@ -326,6 +486,13 @@ namespace ScreenOffTray.Ui
                 owned[i] = replacement; points.Remove(old); points.Add(replacement,logical); old.Dispose();
             }
         }
+        private static void CollectNativeFonts(Control control, HashSet<Font> nativeFonts)
+        {
+            // These fields own dedicated fonts. Keep point fonts on the existing
+            // GDI-painted labels/buttons; converting them changes their glyph size.
+            if(control is MintNumberBox || control is HotkeyCaptureBox || control is MintComboBox) nativeFonts.Add(control.Font);
+            foreach(Control child in control.Controls) CollectNativeFonts(child,nativeFonts);
+        }
         private static void CollectFontAssignments(Control control, Dictionary<Font,Font> replacements, Dictionary<Control,Font> assignments)
         {
             Font next; if (replacements.TryGetValue(control.Font,out next)) assignments.Add(control,next);
@@ -335,30 +502,29 @@ namespace ScreenOffTray.Ui
         {
             if (!layoutReady || IsDisposed || dpi <= 0) return;
             using (SettingsDpiContext.EnterUi()) {
-                SuspendLayout();
+                SuspendLayoutTree(this);
                 bool previousSizing = sizing; sizing = true;
                 try {
                     float target = dpi / 96F, ratio = target / layoutScale;
                     if (Math.Abs(ratio-1F) > .001F) Scale(new SizeF(ratio,ratio));
-                    // Point fonts are rasterized against the session's system font DPI in
-                    // Framework 4.8. Recreate only view-owned fonts for the window DPI.
-                    RescaleOwnedFonts(this,ownedFonts,fontPoints,dpi/fontRasterDpi);
+                    RescaleOwnedFonts(this,ownedFonts,fontPoints,dpi,fontRasterDpi);
                     playbackPanel.ApplyFontDpi(dpi,fontRasterDpi);
                     appliedDpi = dpi; AutoScaleDimensions = new SizeF(dpi,dpi);
-                } finally { ResumeLayout(true); sizing = previousSizing; }
-                FitHeight();
+                } finally { try { ResumeLayoutTree(this); } finally { sizing = previousSizing; } }
+                RequestLayout(LayoutReason.Dpi);
+                CompleteLayout(true);
             }
         }
         // Pure geometry seam: fake work areas do not enumerate or alter displays.
-        internal static Rectangle FitToWorkArea(Rectangle desired, Rectangle work, int dpi, Size frame, bool initial)
+        internal static Rectangle FitToWorkArea(Rectangle desired, Rectangle work, int dpi, Size frame, bool initial, int preferredHeight = 654)
         {
             float scale = Math.Max(1,dpi)/96F;
             int gap = Math.Min((int)Math.Round(10*scale),Math.Max(0,Math.Min(work.Width,work.Height)/8));
             Rectangle available = Rectangle.Inflate(work,-gap,-gap);
             int maxWidth = Math.Max(1,initial ? Math.Min(available.Width,(int)(work.Width*.9)) : available.Width);
             int maxHeight = Math.Max(1,initial ? Math.Min(available.Height,(int)(work.Height*.8)) : available.Height);
-            int width = Math.Min(maxWidth,Math.Max(1,initial ? (int)Math.Round(718*scale)+frame.Width : desired.Width));
-            int height = Math.Min(maxHeight,Math.Max(1,initial ? (int)Math.Round(480*scale)+frame.Height : desired.Height));
+            int width = Math.Min(maxWidth,Math.Max(1,initial ? (int)Math.Round(984*scale)+frame.Width : desired.Width));
+            int height = Math.Min(maxHeight,Math.Max(1,initial ? (int)Math.Round(preferredHeight*scale)+frame.Height : desired.Height));
             int left = initial ? work.Left+(work.Width-width)/2 : Math.Max(available.Left,Math.Min(desired.Left,available.Right-width));
             int top = initial ? work.Top+(work.Height-height)/2 : Math.Max(available.Top,Math.Min(desired.Top,available.Bottom-height));
             return new Rectangle(left,top,width,height);
@@ -381,7 +547,7 @@ namespace ScreenOffTray.Ui
                     int gap = Math.Max(1,(int)Math.Round(10*appliedDpi/96F));
                     MinimumSize = new Size(Math.Min((int)Math.Round(300*appliedDpi/96F),Math.Max(1,work.Width-gap*2)),
                         Math.Min((int)Math.Round(300*appliedDpi/96F),Math.Max(1,(int)(work.Height*.8))));
-                    Rectangle fitted = FitToWorkArea(Bounds,work,appliedDpi,new Size(Width-ClientSize.Width,Height-ClientSize.Height),initial);
+                    Rectangle fitted = FitToWorkArea(Bounds,work,appliedDpi,new Size(Width-ClientSize.Width,Height-ClientSize.Height),initial,text.English ? 720 : 654);
                     if (Bounds != fitted) Bounds = fitted;
                     lastWorkArea = work;
                 } finally { adapting = false; }
@@ -389,17 +555,14 @@ namespace ScreenOffTray.Ui
         }
         private void QueueWorkAreaAdaptation()
         {
-            if (adaptationQueued || adapting || !Visible || IsDisposed || Disposing || !IsHandleCreated) return;
-            adaptationQueued = true;
-            try { BeginInvoke(new Action(delegate {
-                adaptationQueued = false;
-                if (!IsDisposed && !Disposing) AdaptToCurrentWorkArea(false);
-            })); } catch (InvalidOperationException) { adaptationQueued = false; }
+            if (!adapting && Visible) RequestLayout(LayoutReason.WorkArea);
         }
         protected override void WndProc(ref Message message)
         {
             using (SettingsDpiContext.EnterUi()) {
                 if (message.Msg == 0x02E0 && layoutReady) { // WM_DPICHANGED: this view owns scaling, not process-wide WinForms opt-ins.
+                    bool resumeFreeze=interactiveRootSuspended;
+                    ResumeInteractiveRoot(false);
                     int dpi = (int)(message.WParam.ToInt64() & 0xffff);
                     Rectangle? suggested = null;
                     if (message.LParam != IntPtr.Zero) {
@@ -408,15 +571,42 @@ namespace ScreenOffTray.Ui
                     }
                     ApplyWindowDpi(dpi);
                     if (WindowState == FormWindowState.Normal && suggested.HasValue) Bounds = suggested.Value;
-                    AdaptToCurrentWorkArea(false); message.Result = IntPtr.Zero; return;
+                    RequestLayout(LayoutReason.Dpi | LayoutReason.WorkArea | SizeReasons());
+                    CompleteLayout(true);
+                    if(resumeFreeze && interactiveSizing) SuspendInteractiveRoot();
+                    message.Result = IntPtr.Zero; return;
                 }
+                if (message.Msg == 0x0231) { interactiveSizing = true; moveStartSize = ClientSize; SuspendInteractiveRoot(); }
                 base.WndProc(ref message);
                 if (!layoutReady) return;
-                if (message.Msg == 0x007E || (message.Msg == 0x001A && message.WParam.ToInt64() == 0x002F) || message.Msg == 0x0232)
-                    QueueWorkAreaAdaptation(); // display/work-area change, or end of user move/resize.
+                if (message.Msg == 0x0232) {
+                    interactiveSizing = false;
+                    ResumeInteractiveRoot(true);
+                    LayoutReason finalReason = SizeReasons();
+                    if (WindowWorkArea() != lastWorkArea) finalReason |= LayoutReason.WorkArea;
+                    if (ClientSize != moveStartSize || finalLayoutPending || pendingLayout != LayoutReason.None || finalReason != LayoutReason.None) {
+                        RequestLayout(finalReason); CompleteLayout(true);
+                    }
+                }
+                else if (message.Msg == 0x007E || (message.Msg == 0x001A && message.WParam.ToInt64() == 0x002F))
+                    QueueWorkAreaAdaptation();
                 else if (message.Msg == 0x0047 && Visible && !adapting && WindowWorkArea() != lastWorkArea)
                     QueueWorkAreaAdaptation(); // WM_WINDOWPOSCHANGED on a different monitor/work area.
             }
+        }
+        private void SuspendInteractiveRoot()
+        {
+            if(!layoutReady || interactiveRootSuspended || root==null || root.IsDisposed) return;
+            root.SuspendLayout();interactiveRootSuspended=true;
+        }
+        private void ResumeInteractiveRoot(bool performLayout)
+        {
+            if(!interactiveRootSuspended) return;
+            interactiveRootSuspended=false;
+            if(root==null || root.IsDisposed) return;
+            bool previous=sizing;sizing=true;
+            try { root.ResumeLayout(performLayout); }
+            finally { sizing=previous; }
         }
         [StructLayout(LayoutKind.Sequential)] private struct NativeRect { internal int Left,Top,Right,Bottom; }
         [StructLayout(LayoutKind.Sequential)] private struct MonitorWorkArea { internal int Size; internal NativeRect Monitor,Work; internal uint Flags; }
@@ -436,46 +626,213 @@ namespace ScreenOffTray.Ui
         // Kept as a layout entry point for callers; it never changes the window footprint.
         private void FitHeight()
         {
-            using (SettingsDpiContext.EnterUi()) {
-            if (sizing || IsDisposed || Disposing || content == null || viewport == null || footerRow == null || root.Disposing || root.IsDisposed || viewport.Disposing || viewport.IsDisposed) return;
+            RequestLayout(LayoutReason.Content);
+        }
+        private LayoutReason SizeReasons()
+        {
+            LayoutReason reason = LayoutReason.None;
+            if (ClientSize.Width != arrangedClientSize.Width || (viewport != null && viewport.ClientSize.Width != arrangedViewportSize.Width)) reason |= LayoutReason.Width;
+            if (ClientSize.Height != arrangedClientSize.Height || (viewport != null && viewport.ClientSize.Height != arrangedViewportSize.Height)) reason |= LayoutReason.Height;
+            return reason;
+        }
+        protected override void OnLayout(LayoutEventArgs e)
+        {
+            if (!layoutReady || sizing || presentationDepth != 0 || root == null) { base.OnLayout(e); return; }
+            // Let Dock set the root bounds, but leave its expensive child tree
+            // to the one coordinated commit for this size notification.
+            root.SuspendLayout();
+            try { base.OnLayout(e); }
+            finally { root.ResumeLayout(false); }
+            RequestLayout(SizeReasons());
+        }
+        private void CardContentLayoutChanged(object sender,LayoutEventArgs e)
+        {
+            if(layoutReady && !sizing && presentationDepth==0 && !layoutStopped)
+                RequestLayout(LayoutReason.Content);
+        }
+        private void ContentLayoutChanged(object sender, LayoutEventArgs e)
+        {
+            if (sizing || presentationDepth != 0) return;
+            LayoutReason reason = SizeReasons();
+            // Dock/scroll bounds notifications are geometry feedback, not new text.
+            if (reason == LayoutReason.None && (e.AffectedControl != content || e.AffectedProperty != "Bounds")) reason = LayoutReason.Content;
+            RequestLayout(reason);
+        }
+        private void RequestLayout(LayoutReason reason)
+        {
+            if (layoutStopped || IsDisposed || Disposing || reason == LayoutReason.None) return;
+            pendingLayout |= reason;
+            if (!layoutReady || presentationDepth != 0 || sizing || !IsHandleCreated) return;
+            QueueLayout();
+        }
+        private void QueueLayout()
+        {
+            if (layoutQueued || layoutStopped || !IsHandleCreated || IsDisposed || Disposing) return;
+            int generation = layoutGeneration; layoutQueued = true;
+            try { BeginInvoke(new Action(delegate {
+                if (generation != layoutGeneration || layoutStopped) return;
+                layoutQueued = false;
+                CompleteLayout(false);
+            })); } catch (InvalidOperationException) { if (generation == layoutGeneration) layoutQueued = false; }
+        }
+        protected override void OnHandleDestroyed(EventArgs e)
+        {
+            ResumeInteractiveRoot(false);interactiveSizing=false;
+            layoutGeneration++; layoutQueued = false;
+            base.OnHandleDestroyed(e);
+        }
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (layoutReady && pendingLayout != LayoutReason.None) QueueLayout();
+        }
+        private void CompleteLayout(bool final)
+        {
+            if (!layoutReady || layoutStopped || presentationDepth != 0 || IsDisposed || Disposing || !IsHandleCreated) return;
+            if (sizing) { finalLayoutPending |= final; return; }
+            if (pendingLayout == LayoutReason.None && !finalLayoutPending) return;
+            // Keep native resize feedback immediate while leaving the existing
+            // TableLayoutPanel tree stable until the pointer is released.
+            if (interactiveSizing && !final) {
+                pendingLayout = LayoutReason.None; finalLayoutPending = true;
+                return;
+            }
+            LayoutReason reason = pendingLayout; pendingLayout = LayoutReason.None; finalLayoutPending = false;
             sizing = true;
             try {
-                // Test the full viewport first. Measuring only the already-scrolled
-                // client width can keep a scrollbar alive after a wider row would fit.
-                int width = Math.Max(1,wholeWindowScroll ? ClientSize.Width : viewport.Width);
-                // Release an obsolete scroll range only when the complete body
-                // already fits at full width. Needed ranges keep their position.
-                if (!wholeWindowScroll && viewport.VerticalScroll.Visible &&
-                    content.GetPreferredSize(new Size(width,0)).Height <= viewport.Height) {
-                    viewport.AutoScrollMinSize = Size.Empty;
-                    viewport.AutoScroll = false;
-                    viewport.AutoScroll = true;
+                if ((reason & LayoutReason.WorkArea) != 0) AdaptToCurrentWorkArea(false);
+                reason |= SizeReasons();
+                content.SuspendLayout(); footer.SuspendLayout();
+                try {
+                    // Height changes still need the docked root to commit the new
+                    // viewport. Keep the body and footer suspended so root layout
+                    // cannot recursively measure the complete settings tree.
+                    if ((reason & LayoutReason.Height) != 0) root.PerformLayout();
+                    ArrangeLayout(reason);
                 }
-                bool narrow = width < Units(600);
+                finally {
+                    try { footer.ResumeLayout(true); }
+                    finally { content.ResumeLayout(true); }
+                }
+                arrangedClientSize = ClientSize; arrangedViewportSize = viewport.ClientSize;
+                if (scrollErrorVersion != 0 && scrollErrorVersion == errorVersion && error.Visible && Visible) {
+                    scrollErrorVersion = 0;
+                    if (wholeWindowScroll) ScrollControlIntoView(error); else viewport.ScrollControlIntoView(error);
+                }
+            } finally { sizing = false; }
+            if (finalLayoutPending && !finishingLayout) {
+                finishingLayout = true;
+                try { CompleteLayout(true); }
+                finally { finishingLayout = false; }
+            }
+            // A real change during commit gets one posted turn. Internal bounds
+            // feedback is filtered above, so this cannot become a self-posting chain.
+            if (!layoutStopped && (pendingLayout != LayoutReason.None || finalLayoutPending)) QueueLayout();
+        }
+        private void ArrangeLayout(LayoutReason reason)
+        {
+            using (SettingsDpiContext.EnterUi()) {
+                bool measure = measuredWidth < 0 ||
+                    (reason & (LayoutReason.Width | LayoutReason.Content | LayoutReason.Dpi)) != 0;
+                if (!measure) {
+                    CommitScrollGeometry(measuredBody,measuredFooter,false);
+                    // A height change may add/remove the native scrollbar.
+                    if (viewport.ClientSize.Width == measuredWidth || wholeWindowScroll) return;
+                }
+                if ((reason & (LayoutReason.Content | LayoutReason.Dpi)) != 0) measuredBodyKey = null;
+                int fullWidth = Math.Max(1,wholeWindowScroll ? ClientSize.Width : viewport.Width);
+                int barWidth = SystemInformation.VerticalScrollBarWidth;
+                bool reserveBar = !wholeWindowScroll && viewport.VerticalScroll.Visible &&
+                    (fullWidth < Units(840) || fullWidth-barWidth >= Units(840));
+                int width = Math.Max(1,fullWidth-(reserveBar ? barWidth : 0));
+                // Two bounded passes: full width, then a reserved vertical bar
+                // only if needed. The breakpoint uses the same width as measure.
+                for (int pass = 0; pass < 2; pass++) {
+                MeasureAndArrangeBody(width);
+                content.PerformLayout();
+                // Parent docking commits the final column width only here. Flush
+                // deferred child layout now, rather than leaving old one-column
+                // HWND bounds behind a newly selected two-column topology.
+                configuration.PerformLayout();
+                basics.PerformLayout();
+                playbackPanel.PerformLayout();
+                bool narrow = width < Units(840);
+                bool stackedFields = narrow;
+                string bodyKey = (narrow ? "n" : "w") + (stackedFields ? "s" : "f") +
+                    "|" + width.ToString(CultureInfo.InvariantCulture) +
+                    "|" + layoutScale.ToString("R",CultureInfo.InvariantCulture);
+                if (measuredBodyKey != bodyKey) {
+                    int safeWidth = narrow ? Math.Min(width,Units(300)) : width;
+                    measuredBody = content.GetPreferredSize(new Size(Math.Max(1,safeWidth),0)).Height;
+                    measuredBodyKey = bodyKey;
+                }
+                int body = measuredBody;
+                int footerHeight = ArrangeChrome(width < Units(840));
+                int available = ClientSize.Height-header.Height-footerHeight;
+                bool pageScroll = available < Units(120);
+                bool needsBar = !pageScroll && body > available;
+                if (pass == 0 && needsBar != reserveBar) {
+                    reserveBar = needsBar;
+                    width = Math.Max(1,fullWidth-(reserveBar ? barWidth : 0)); continue;
+                }
+                measuredWidth = width; measuredBody = body; measuredFooter = footerHeight;
+                CommitScrollGeometry(body,footerHeight,true);
+                break;
+                }
+            }
+        }
+        private void MeasureAndArrangeBody(int width)
+        {
+                bool narrow = width < Units(840);
+                int innerWidth = Math.Max(1,width-Units(6)*2);
+                int cardPadding = Units(24);
+                int cardGap = Units(4);
+                int basicOuter = narrow ? innerWidth : (int)((innerWidth-cardGap)*.472F);
+                int playbackOuter = narrow ? innerWidth : Math.Max(1,innerWidth-cardGap-basicOuter);
+                int basicWidth = Math.Max(1,basicOuter-cardPadding*2);
+                basics.ReferenceMinimumHeight = playbackPanel.ReferenceMinimumHeight = narrow ? 0 : Units(398);
+                // Read the requested geometry first; prepare the existing tables
+                // once, then let the body consume one preferred-size pass.
+                viewport.SuspendLayout(); content.SuspendLayout(); configuration.SuspendLayout(); basics.SuspendLayout();
+                try {
                 if ((configuration.ColumnCount == 1) != narrow) {
                     configuration.SuspendLayout(); configuration.Controls.Remove(basics); configuration.Controls.Remove(playbackPanel);
                     configuration.ColumnCount = narrow ? 1 : 2; configuration.RowCount = narrow ? 2 : 1;
                     configuration.ColumnStyles.Clear(); configuration.RowStyles.Clear();
-                    configuration.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,narrow ? 100 : 49.14F));
-                    if (!narrow) configuration.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50.86F));
-                    basics.Margin = new Padding(0,0,narrow ? 0 : Units(18),narrow ? Units(34) : 0);
-                    playbackPanel.Margin = new Padding(narrow ? 0 : Units(18),0,0,0);
+                    configuration.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,narrow ? 100 : 47.2F));
+                    if (!narrow) configuration.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,52.8F));
+                    basics.Margin = new Padding(0,0,narrow ? 0 : Units(2),narrow ? Units(12) : 0);
+                    playbackPanel.Margin = new Padding(narrow ? 0 : Units(2),0,0,0);
                     configuration.Controls.Add(basics,0,0); configuration.Controls.Add(playbackPanel,narrow ? 0 : 1,narrow ? 1 : 0);
-                    configuration.ResumeLayout(true);
+                    configuration.ResumeLayout(false);
                 }
-                content.Padding = new Padding(Units(narrow ? 14 : 18),Units(16),Units(narrow ? 14 : 18),Units(16));
-                viewport.SuspendLayout();
-                content.MaximumSize = new Size(width,0); content.MinimumSize = new Size(width,0); content.Width = width;
-                content.PerformLayout();
-                int basicWidth = Math.Max(1,basics.Width);
+                Padding contentPadding = new Padding(Units(6),0,Units(6),0);
+                if (content.Padding != contentPadding) content.Padding = contentPadding;
+                Padding basicMargin = new Padding(0,0,narrow ? 0 : Units(2),narrow ? Units(12) : 0);
+                Padding playbackMargin = new Padding(narrow ? 0 : Units(2),0,0,0);
+                if(basics.Margin != basicMargin) basics.Margin = basicMargin;
+                if(playbackPanel.Margin != playbackMargin) playbackPanel.Margin = playbackMargin;
+                if (content.Width != width) content.Width = width;
+                Padding cardInsets=new Padding(Units(24),Units(24),Units(24),Units(narrow ? 104 : 24));
+                if(basics.Padding!=cardInsets) basics.Padding=cardInsets;
+                if(playbackPanel.Padding!=cardInsets) playbackPanel.Padding=cardInsets;
                 var fields = (TableLayoutPanel)basics.Controls["basic-fields"];
-                bool stackedFields = narrow && text.English;
+                bool stackedFields = narrow;
                 var shortcutLabel = fields.Controls["hotkey-frame-label"]; var languageLabel = fields.Controls["language-label"];
                 var shortcutFrame = hotkey.Parent;
+                Padding fieldMargin = new Padding(0,0,0,Units(16));
+                if (shortcutFrame.Margin != fieldMargin) shortcutFrame.Margin = fieldMargin;
+                if (language.Margin != fieldMargin) language.Margin = fieldMargin;
+                if (shortcutFrame.Height != Units(39)) shortcutFrame.Height = Units(39);
+                Size checkSize = new Size(0,Units(42));
+                if (startup.MinimumSize != checkSize) startup.MinimumSize = checkSize;
+                if (automaticUpdates.MinimumSize != checkSize) automaticUpdates.MinimumSize = checkSize;
+                if (startup.Margin != Padding.Empty) startup.Margin = Padding.Empty;
+                if (automaticUpdates.Margin != Padding.Empty) automaticUpdates.Margin = Padding.Empty;
                 if ((fields.ColumnCount == 2) != stackedFields) {
                     fields.SuspendLayout(); fields.Controls.Clear(); fields.ColumnStyles.Clear(); fields.RowStyles.Clear();
                     fields.ColumnCount = stackedFields ? 2 : 3; fields.RowCount = stackedFields ? 4 : 2;
-                    fields.ColumnStyles.Add(new ColumnStyle(stackedFields ? SizeType.Percent : SizeType.Absolute,stackedFields ? 100 : Units(text.English ? 82 : 80)));
+                    fields.ColumnStyles.Add(new ColumnStyle(stackedFields ? SizeType.Percent : SizeType.Absolute,stackedFields ? 100 : Units(78)));
                     fields.ColumnStyles.Add(new ColumnStyle(stackedFields ? SizeType.AutoSize : SizeType.Percent,stackedFields ? 0 : 100));
                     if(!stackedFields) fields.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
                     fields.Controls.Add(shortcutLabel,0,0); fields.Controls.Add(shortcutFrame,stackedFields ? 0 : 1,stackedFields ? 1 : 0); fields.Controls.Add(defaults,stackedFields ? 1 : 2,stackedFields ? 1 : 0);
@@ -484,7 +841,10 @@ namespace ScreenOffTray.Ui
                     shortcutLabel.Margin = languageLabel.Margin = stackedFields ? new Padding(0,0,0,Units(6)) : new Padding(0,Units(9),Units(8),0);
                     fields.ResumeLayout(true);
                 }
-                if(!stackedFields) fields.ColumnStyles[0].Width = Units(narrow && basicWidth < Units(310) ? (text.English ? 82 : 66) : (text.English ? 82 : 80));
+                if(!stackedFields) {
+                    float logicalWidth = Units(narrow && basicWidth < Units(310) ? (text.English ? 78 : 76) : (text.English ? 150 : 150));
+                    if (fields.ColumnStyles[0].Width != logicalWidth) fields.ColumnStyles[0].Width = logicalWidth;
+                }
                 var idleLine = (TableLayoutPanel)basics.Controls["timeout-line"]; var idleLabel = idleLine.Controls["timeout-label"]; var idleRow = timeout.Parent.Parent;
                 if ((idleLine.ColumnCount == 1) != stackedFields) {
                     idleLine.SuspendLayout(); idleLine.Controls.Remove(idleLabel); idleLine.Controls.Remove(idleRow); idleLine.ColumnStyles.Clear(); idleLine.RowStyles.Clear();
@@ -493,91 +853,156 @@ namespace ScreenOffTray.Ui
                     idleLine.Controls.Add(idleLabel,0,0); idleLine.Controls.Add(idleRow,stackedFields ? 0 : 1,stackedFields ? 1 : 0);
                     idleLabel.Margin = stackedFields ? new Padding(0,0,0,Units(8)) : new Padding(0,Units(9),0,0); idleRow.Anchor = AnchorStyles.Right; idleLine.ResumeLayout(true);
                 }
-                defaults.MinimumSize = new Size(Units(narrow && basicWidth < Units(310) ? (text.English ? 60 : 83) : 95),Units(39));
-                defaults.Margin = new Padding(Units(narrow && basicWidth < Units(310) ? 7 : 10),0,0,Units(16));
-                timeout.Parent.Width = Units(narrow && basicWidth < Units(310) ? 132 : 158);
+                if(!stackedFields) {
+                    idleLine.ColumnStyles[0].SizeType = SizeType.Absolute;
+                    float idleLabelWidth = Units(text.English ? 150 : 150);
+                    if(Math.Abs(idleLine.ColumnStyles[0].Width-idleLabelWidth)>.1F) idleLine.ColumnStyles[0].Width = idleLabelWidth;
+                }
+                Size defaultSize = new Size(Units(narrow && basicWidth < Units(310) ? (text.English ? 68 : 80) : 92),Units(39));
+                if (defaults.MinimumSize != defaultSize) defaults.MinimumSize = defaultSize;
+                Padding defaultMargin = new Padding(Units(narrow && basicWidth < Units(310) ? 7 : 10),0,0,Units(16));
+                if (defaults.Margin != defaultMargin) defaults.Margin = defaultMargin;
+                int timeoutWidth = Units(narrow && basicWidth < Units(310) ? 128 : 180);
+                if (timeout.Parent.Width != timeoutWidth) timeout.Parent.Width = timeoutWidth;
+                int playbackWidth = Math.Max(1,playbackOuter-Units(4));
+                if (playbackPanel.Width != playbackWidth) playbackPanel.Width = playbackWidth;
                 playbackPanel.AdaptWidth();
-                automaticUpdates.MaximumSize = startup.MaximumSize = new Size(basicWidth,0);
+                Size checkWidth = new Size(basicWidth,0);
+                if (startup.MaximumSize != checkWidth) startup.MaximumSize = checkWidth;
+                if (automaticUpdates.MaximumSize != checkWidth) automaticUpdates.MaximumSize = checkWidth;
+                // Resolve row/column topology before the one preferred-size read.
+                configuration.PerformLayout();
+                // A percent-column TableLayoutPanel may ask each card to measure
+                // against the entire row, then feed the resulting height back into
+                // Dock=Fill. Measure each card at its real column width instead.
+                int basicHeight=basics.GetPreferredSize(new Size(basicOuter,0)).Height;
+                int playbackHeight=playbackPanel.GetPreferredSize(new Size(playbackOuter,0)).Height;
+                int configurationHeight=narrow ? basicHeight+playbackHeight+Units(12) : Math.Max(basicHeight,playbackHeight);
+                configuration.AutoSize=false;
+                if(configuration.RowStyles.Count != (narrow ? 2 : 1)) {
+                    configuration.RowStyles.Clear();
+                    configuration.RowStyles.Add(new RowStyle(SizeType.Absolute,0));
+                    if(narrow) configuration.RowStyles.Add(new RowStyle(SizeType.Absolute,0));
+                }
+                configuration.RowStyles[0].Height=narrow ? basicHeight+Units(12) : configurationHeight;
+                if(narrow) configuration.RowStyles[1].Height=playbackHeight;
+                if(configuration.Height != configurationHeight) configuration.Height=configurationHeight;
+                } finally {
+                    basics.ResumeLayout(false); configuration.ResumeLayout(false); content.ResumeLayout(false); viewport.ResumeLayout(false);
+                }
+        }
+        private int ArrangeChrome(bool narrow)
+        {
+                footer.SuspendLayout(); root.SuspendLayout();
                 try {
-                    int body = content.GetPreferredSize(new Size(width,0)).Height;
-                    if(body > viewport.Height) {
-                        width = Math.Max(1,width-SystemInformation.VerticalScrollBarWidth);
-                        content.MinimumSize = Size.Empty; content.MaximumSize = new Size(width,0); content.Width = width; content.PerformLayout();
-                        playbackPanel.AdaptWidth(); body = content.GetPreferredSize(new Size(width,0)).Height;
-                    }
-                    content.MinimumSize = Size.Empty;
-                    Size scroll = wholeWindowScroll ? Size.Empty : new Size(0,body);
-                    if(viewport.AutoScrollMinSize != scroll) viewport.AutoScrollMinSize = scroll;
-                } finally { viewport.ResumeLayout(true); }
-                header.Height = Units(narrow ? 90 : 64);
-                int titleWidth = heading.GetPreferredSize(Size.Empty).Width;
-                heading.SetBounds(Units(narrow ? 14 : 18),Units(narrow ? 16 : 12),titleWidth,Units(40));
-                int stateLeft = heading.Right+Units(narrow ? 10 : 24);
-                int catWidth = Units(narrow ? 100 : 162), catHeight = Units(narrow ? 52 : 60);
-                cat.SetBounds(header.Width-catWidth-Units(narrow ? 3 : 18),header.Height-catHeight,catWidth,catHeight);
-                int stateWidth = Math.Max(1,header.Width-stateLeft-Units(narrow ? 14 : 188));
-                stateLine.SetBounds(stateLeft,Units(narrow ? 21 : 20),stateWidth,Units(28));
-                int copyWidth = text.English ? Units(350) : Units(360);
+                Padding footerPadding = new Padding(Units(narrow ? 15 : 26),Units(22),Units(narrow ? 15 : 20),Units(22));
+                if (footer.Padding != footerPadding) footer.Padding = footerPadding;
+                Size rowMinimum=new Size(0,Units(68));
+                if(footerRow.MinimumSize!=rowMinimum) footerRow.MinimumSize=rowMinimum;
+                Padding footerMargin = new Padding(Units(narrow ? 6 : 10),Units(4),Units(narrow ? 6 : 10),Units(10));
+                if (footer.Margin != footerMargin) footer.Margin = footerMargin;
+                int catWidth = Units(narrow ? 92 : 134), catHeight = Units(narrow ? 88 : 128);
+                Rectangle catBounds = new Rectangle(Units(narrow ? 16 : 30),Units(narrow ? 14 : 0),catWidth,catHeight);
+                if (cat.Bounds != catBounds) cat.SetBounds(catBounds.X,catBounds.Y,catBounds.Width,catBounds.Height);
+                int titleLeft = catBounds.Right+Units(narrow ? 12 : 14);
+                int titleWidth = Math.Max(Units(120),TextRenderer.MeasureText(heading.Text,heading.Font,Size.Empty,TextFormatFlags.NoPadding|TextFormatFlags.SingleLine).Width);
+                header.Title = heading.Text; header.Subtitle = subheading.Text;
+                header.TitleFont = heading.Font; header.SubtitleFont = subheading.Font; header.SubtitleColor = subheading.ForeColor;
+                Rectangle titleBounds = new Rectangle(titleLeft,Units(narrow ? 22 : 27),titleWidth,Units(narrow ? 70 : 74));
+                if (header.TitleBounds != titleBounds) { header.TitleBounds = titleBounds; header.Invalidate(titleBounds); }
+                Rectangle sceneBounds = new Rectangle(Units(410),Units(14),Units(284),Units(116));
+                if (headerScene.Bounds != sceneBounds) headerScene.SetBounds(sceneBounds.X,sceneBounds.Y,sceneBounds.Width,sceneBounds.Height);
+                int statusTextWidth = TextRenderer.MeasureText(headerStatus.Text ?? "",headerStatus.Font,Size.Empty,
+                    TextFormatFlags.NoPadding|TextFormatFlags.SingleLine).Width;
+                int recheckWidth = recheckLink.Visible ? recheckLink.PreferredSize.Width : 0;
+                bool compactState = narrow || header.Width < Units(950) ||
+                    statusTextWidth+recheckWidth+Units(48) > Units(text.English ? 256 : 240);
+                int headerHeight=Units(compactState ? 170 : 130);
+                if(header.Height!=headerHeight) header.Height=headerHeight;
+                headerScene.Visible = !compactState && !SystemInformation.HighContrast;
+                int stateLeft = compactState ? (narrow ? Units(12) : titleLeft) : header.Width-Units(text.English ? 272 : 256);
+                int stateWidth = Math.Max(Units(170),header.Width-stateLeft-Units(12));
+                Rectangle stateBounds = new Rectangle(stateLeft,Units(compactState ? 117 : 42),stateWidth,Units(36));
+                if (stateLine.Bounds != stateBounds) stateLine.SetBounds(stateBounds.X,stateBounds.Y,stateBounds.Width,stateBounds.Height);
+                int copyWidth = text.English ? Units(500) : Units(530);
                 bool narrowFooter = footer.ClientSize.Width-footer.Padding.Horizontal < copyWidth+buttons.PreferredSize.Width+Units(12);
                 if ((footerRow.ColumnCount == 1) != narrowFooter) {
                     var copy = footerRow.Controls["footer-copy"];
                     footerRow.SuspendLayout(); footerRow.Controls.Remove(copy); footerRow.Controls.Remove(buttons);
-                    footerRow.ColumnCount = narrowFooter ? 1 : 2; footerRow.RowCount = narrowFooter ? 2 : 1;
-                    footerRow.ColumnStyles.Clear(); footerRow.RowStyles.Clear(); footerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-                    if (!narrowFooter) footerRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-                    copy.Margin = new Padding(0,0,narrowFooter ? 0 : Units(12),narrowFooter ? Units(14) : 0);
-                    footerRow.Controls.Add(copy,0,0); footerRow.Controls.Add(buttons,narrowFooter ? 0 : 1,narrowFooter ? 1 : 0);
+                    footerRow.ColumnCount = narrowFooter ? 1 : 3; footerRow.RowCount = narrowFooter ? 2 : 1;
+                    footerRow.ColumnStyles.Clear(); footerRow.RowStyles.Clear(); footerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,narrowFooter ? 100 : 55));
+                    if (!narrowFooter) { footerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,12)); footerRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); }
+                    Padding copyMargin = new Padding(0,0,narrowFooter ? 0 : Units(12),narrowFooter ? Units(14) : 0);
+                    if (copy.Margin != copyMargin) copy.Margin = copyMargin;
+                    footerRow.Controls.Add(copy,0,0); footerRow.Controls.Add(buttons,narrowFooter ? 0 : 2,narrowFooter ? 1 : 0);
                     buttons.Anchor = AnchorStyles.Right; footerRow.ResumeLayout(true);
                 }
                 // AutoSize can retain the footer's former multi-line measurement
                 // after columns stack. Reserve its current preferred height explicitly.
-                int footerHeight = footer.GetPreferredSize(new Size(root.ClientSize.Width,0)).Height;
+                int footerHeight = footer.GetPreferredSize(new Size(root.ClientSize.Width,0)).Height + footer.Margin.Vertical;
                 if(root.RowStyles[2].SizeType != SizeType.Absolute) root.RowStyles[2].SizeType = SizeType.Absolute;
                 if(Math.Abs(root.RowStyles[2].Height-footerHeight) > .1F) root.RowStyles[2].Height = footerHeight;
+                return footerHeight;
+                } finally { footer.ResumeLayout(false); root.ResumeLayout(true); }
+        }
+        private void CommitScrollGeometry(int body, int footerHeight, bool bodyChanged)
+        {
+                bool changed = bodyChanged;
+                if (content.Height != body) { content.Height = body; changed = true; }
                 // In a very short work area, scroll the complete page instead of
                 // letting fixed chrome consume the body. Normal C stays unchanged.
                 bool scrollWindow = ClientSize.Height < header.Height+footerHeight+Units(120);
                 if(scrollWindow != wholeWindowScroll) {
+                    changed = true;
                     wholeWindowScroll = scrollWindow;
                     AutoScrollPosition = Point.Empty; AutoScrollMinSize = Size.Empty;
                     viewport.AutoScrollMinSize = Size.Empty; viewport.AutoScroll = !scrollWindow;
                     AutoScroll = scrollWindow; root.Dock = scrollWindow ? DockStyle.Top : DockStyle.Fill;
                 }
                 if(wholeWindowScroll) {
-                    if(root.Width != ClientSize.Width) root.Width = ClientSize.Width;
-                    int fullHeight = header.Height+content.GetPreferredSize(new Size(Math.Max(1,viewport.Width),0)).Height+footerHeight;
-                    if(root.Height != fullHeight) root.Height = fullHeight;
+                    if(root.Width != ClientSize.Width) { root.Width = ClientSize.Width; changed = true; }
+                    int fullHeight = header.Height+body+footerHeight;
+                    if(root.Height != fullHeight) { root.Height = fullHeight; changed = true; }
                     Size page = new Size(0,fullHeight);
-                    if(AutoScrollMinSize != page) AutoScrollMinSize = page;
+                    if(AutoScrollMinSize != page) { AutoScrollMinSize = page; changed = true; }
+                } else {
+                    Size scroll = new Size(0,body);
+                    if(viewport.AutoScrollMinSize != scroll) { viewport.AutoScrollMinSize = scroll; changed = true; }
                 }
-            } finally { sizing = false; }
-            }
+                if (bodyChanged) content.PerformLayout();
+                if (changed) viewport.PerformLayout();
         }
         private int Units(int logical) { return Math.Max(1,(int)Math.Round(logical*layoutScale)); }
         private string Localize(string value)
         {
-            if (String.IsNullOrEmpty(value)) return "";
-            string[] parts = value.Split(new[] { " / " }, StringSplitOptions.None);
-            return parts.Length > 1 ? (text.English ? parts[parts.Length - 1] : parts[0]) : value;
+            if(String.IsNullOrEmpty(value)) return "";
+            string[] lines=value.Replace("\r\n","\n").Split('\n');
+            for(int i=0;i<lines.Length;i++) {
+                string[] parts=lines[i].Split(new[]{" / "},StringSplitOptions.None);
+                if(parts.Length>1) lines[i]=text.English ? parts[parts.Length-1] : parts[0];
+            }
+            return String.Join(Environment.NewLine,lines);
         }
         private void SetError(string value)
         {
-            error.Text = Localize(value); error.Visible = !String.IsNullOrEmpty(error.Text); FitHeight();
-            if (Visible && error.Visible) {
-                if (wholeWindowScroll) ScrollControlIntoView(error);
-                else viewport.ScrollControlIntoView(error);
-            }
+            rawError=value;
+            errorVersion++;
+            error.Text = Localize(value); error.Visible = !String.IsNullOrEmpty(error.Text);
+            scrollErrorVersion = error.Visible ? errorVersion : 0;
+            FitHeight(); CompleteLayout(true);
         }
         private bool Running { get { return prepareRequested || setup.Preparing; } }
 
-        private void SaveValues()
+        internal Func<SettingsValues,System.Threading.Tasks.Task<string>> SaveAsync;
+        internal void ConfigureWhitelistSave(Func<string[],System.Threading.Tasks.Task<string>> save) {playbackPanel.SaveWhitelistAsync=save;}
+        private async void SaveValues()
         {
             if (Running || saving || closeWhenSafe) return;
-            if (hotkey.HasHeldKeys) { SetError(text.Pick("请先松开组合键，再保存。", "Release the shortcut keys before saving.")); return; }
+            if (hotkey.HasHeldKeys) { SetError("请先松开组合键，再保存。 / Release the shortcut keys before saving."); return; }
             if (!String.IsNullOrEmpty(hotkey.Error)) { SetError(hotkey.Error); return; }
             int minutes;
             if (!Int32.TryParse(timeout.Text, NumberStyles.Integer, CultureInfo.CurrentCulture, out minutes) || minutes < 1 || minutes > 1440) {
-                SetError(text.Pick("请输入 1–1440 分钟。", "Enter 1–1440 minutes.")); return;
+                SetError("请输入 1–1440 分钟。 / Enter 1–1440 minutes."); return;
             }
             int playbackMinutes; string playbackError;
             if (!playbackPanel.TryReadLimit(out playbackMinutes, out playbackError)) { SetError(playbackError); return; }
@@ -587,9 +1012,9 @@ namespace ScreenOffTray.Ui
                 PlaybackLimitEnabled = playbackPanel.LimitEnabled, PlaybackLimitMinutes = playbackMinutes };
             saving = true; saveButton.Enabled = false;
             try {
-                string reason = save(value);
+                string reason = SaveAsync == null ? save(value) : await SaveAsync(value);
                 if (!String.IsNullOrEmpty(reason)) { SetError(reason); return; }
-                DialogResult = DialogResult.OK; Close();
+                saving = false; DialogResult = DialogResult.OK; Close();
             } catch (Exception ex) { SetError(ex.Message); }
             finally { saving = false; if (!IsDisposed) saveButton.Enabled = !Running && !closeWhenSafe; }
         }
@@ -622,6 +1047,7 @@ namespace ScreenOffTray.Ui
         }
         private void ClosingDialog(object sender, FormClosingEventArgs e)
         {
+            if(saving) {e.Cancel=true;return;}
             if (!Running) { if (DialogResult != DialogResult.OK) DialogResult = DialogResult.Cancel; return; }
             e.Cancel = true; DialogResult = DialogResult.None; handlingClose = true;
             try { RequestCancel(true); } finally { handlingClose = false; }
@@ -654,14 +1080,22 @@ namespace ScreenOffTray.Ui
         {
             using (SettingsDpiContext.EnterUi()) {
             if (IsDisposed) return;
-            checkingUpdates = checking;
-            updateCheck.Text = checking ? text.Pick("正在检查…", "Checking…") :
+            rawUpdateDetail=detail;updateFailed=failed;
+            string checkText = checking ? text.Pick("正在检查…", "Checking…") :
                 failed ? text.Pick("重新检查", "Check again") : text.Pick("检查更新", "Check for updates");
-            updateDetail.Text = detail ?? "";
+            string localizedDetail=Localize(detail);
+            bool bodyChanged = updateDetail.Text != localizedDetail || updateCheck.Text != checkText || releaseShown != available;
+            BeginPresentation();
+            try {
+            checkingUpdates = checking;
+            updateCheck.Text = checkText;
+            updateDetail.Text = localizedDetail;
             updateDetail.ForeColor = failed && !SystemInformation.HighContrast ? Color.FromArgb(166, 38, 24) : SecondaryText;
             updateSection.Visible = !String.IsNullOrEmpty(updateDetail.Text);
             releasePage.Visible = available;
-            UpdateActions(); FitHeight();
+            releaseShown = available;
+            UpdateActions();
+            } finally { EndPresentation(bodyChanged); }
             }
         }
         private void UpdateActions()
@@ -687,28 +1121,57 @@ namespace ScreenOffTray.Ui
         private void ApplySetup()
         {
             bool running = Running;
+            bool showSetup = setup.Visible && !(setup.Ready && !running);
+            string detail = Localize(setup.Detail);
+            if (prepareRequested) detail = text.Pick("正在准备，请稍候…", "Preparing. Please wait…");
+            if (cancelRequested) detail += "\r\n" + text.Pick("已请求取消，等待处理结果…", "Cancellation requested; waiting for the result…");
+            string diagnosticText = detail + (String.IsNullOrEmpty(setup.Diagnostics) ? "" : "\r\n\r\n" + setup.Diagnostics);
+            string prepareText = running ? text.Pick("正在准备…", "Preparing…") : setup.Checking
+                ? text.Pick("正在检查…", "Checking…") : text.Pick("一键准备", "Prepare");
+            bool bodyChanged = setupShown != showSetup || (showSetup &&
+                (setupDetail.Text != detail || setupExpanded != expanded || setupRunning != running || prepareButton.Text != prepareText ||
+                 (expanded && diagnostics.Text != diagnosticText)));
+            BeginPresentation();
+            try {
             headerStatus.Text = running ? text.Pick("正在准备…", "Preparing…") : setup.Checking ? text.Pick("正在检查…", "Checking…") : setup.Ready ? text.Pick("显示已就绪", "Display ready") : text.Pick("关屏尚未启用", "Display off not enabled");
-            displayMark.Ready = setup.Ready && !running && !setup.Checking; displayMark.Invalidate();
-            recheckLink.Visible = !setup.Ready || running || setup.Checking;
+            bool ready = setup.Ready && !running && !setup.Checking;
+            if (displayMark.Ready != ready) { displayMark.Ready = ready; displayMark.Invalidate(); }
+            recheckLink.Visible = recheck != null;
             recheckLink.Text = setup.Ready ? text.Pick("检查", "Check") : text.Pick("重新检查", "Recheck");
             configuration.Enabled = !running && !closeWhenSafe;
             saveButton.Enabled = !running && !closeWhenSafe && !saving;
             cancelButton.Enabled = !closeWhenSafe;
             cancelButton.Text = closeWhenSafe ? text.Pick("等待取消…", "Waiting…") : text.Pick("取消", "Cancel");
-            setupSection.Visible = setup.Visible && !(setup.Ready && !running);
-            setupDetail.Text = setup.Detail ?? "";
-            if (prepareRequested) setupDetail.Text = text.Pick("正在准备，请稍候…", "Preparing. Please wait…");
-            if (cancelRequested) setupDetail.Text += "\r\n" + text.Pick("已请求取消，等待处理结果…", "Cancellation requested; waiting for the result…");
-            prepareButton.Text = running ? text.Pick("正在准备…", "Preparing…") : setup.Checking
-                ? text.Pick("正在检查…", "Checking…") : text.Pick("一键准备", "Prepare");
+            setupSection.Visible = showSetup;
+            if (setupDetail.Text != detail) setupDetail.Text = detail;
+            prepareButton.Text = prepareText;
             prepareButton.Enabled = !running && !setup.Checking && setup.CanPrepare && !closeWhenSafe;
             cancelSetup.Visible = running; cancelSetup.Enabled = running && !cancelRequested;
             details.Text = expanded ? text.Pick("收起诊断", "Hide diagnostics") : text.Pick("诊断详情", "Diagnostic details");
             setupDetail.AccessibleDescription = setupDetail.Text;
-            diagnostics.Text = setupDetail.Text + (String.IsNullOrEmpty(setup.Diagnostics) ? "" : "\r\n\r\n" + setup.Diagnostics); diagnostics.Visible = displaySettings.Visible = expanded;
+            if (diagnostics.Text != diagnosticText) diagnostics.Text = diagnosticText;
+            diagnostics.Visible = displaySettings.Visible = expanded;
             displaySettings.Enabled = !running && !setup.Checking && !closeWhenSafe;
             UpdateActions();
-            FitHeight();
+            setupShown = showSetup; setupExpanded = expanded; setupRunning = running;
+            } finally { EndPresentation(bodyChanged); }
+        }
+        private void BeginPresentation()
+        {
+            presentationDepth++;
+            root.SuspendLayout(); content.SuspendLayout(); setupSection.SuspendLayout(); updateSection.SuspendLayout();
+            stateLine.SuspendLayout(); versionRow.SuspendLayout();
+        }
+        private void EndPresentation(bool fitBody)
+        {
+            try {
+                stateLine.ResumeLayout(true); versionRow.ResumeLayout(true);
+                // Hidden diagnostic text and header-only state changes do not
+                // require the body to consume its deferred preferred-size pass.
+                setupSection.ResumeLayout(fitBody); updateSection.ResumeLayout(fitBody);
+                content.ResumeLayout(fitBody); root.ResumeLayout(fitBody);
+            } finally { presentationDepth--; }
+            if (fitBody) FitHeight();
         }
     }
 
@@ -716,10 +1179,16 @@ namespace ScreenOffTray.Ui
     internal sealed class InputFrame : Panel
     {
         private readonly Control input;
+        private float visualScale = 1F;
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            return new Size(1,Math.Max(1,(int)Math.Round(39*visualScale)));
+        }
+        protected override void ScaleControl(SizeF factor,BoundsSpecified specified) { visualScale *= factor.Height; base.ScaleControl(factor,specified); }
         internal InputFrame(Control input)
         {
             this.input = input; Name = input.Name + "-frame"; TabIndex = input.TabIndex;
-            TabStop = false; Height = 39; Width = input.Width + 20; Padding = new Padding(10, 4, 10, 4);
+            TabStop = false; AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink; Height = 39; Width = input.Width + 16; Padding = new Padding(8, 4, 8, 4);
             BackColor = SystemInformation.HighContrast ? SystemColors.Window : Color.White;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             var box = input as TextBox; if (box != null) box.BorderStyle = BorderStyle.None;
@@ -737,7 +1206,8 @@ namespace ScreenOffTray.Ui
         {
             base.OnLayout(e);
             if (input == null) return;
-            int h = input.PreferredSize.Height;
+            var box = input as TextBox;
+            int h = box == null ? input.PreferredSize.Height : box.PreferredHeight;
             input.SetBounds(Padding.Left, Math.Max(1, (ClientSize.Height - h) / 2),
                 Math.Max(1, ClientSize.Width - Padding.Horizontal), h);
         }
@@ -757,9 +1227,19 @@ namespace ScreenOffTray.Ui
         internal bool Primary;
         internal int Symbol; // 1 power, 2 pause, 3 resume; presentation only.
         private bool hovered, pressed;
+        private float visualScale = 1F;
+        protected override void ScaleControl(SizeF factor,BoundsSpecified specified) { visualScale *= factor.Height; base.ScaleControl(factor,specified); }
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            Size caption=TextRenderer.MeasureText(Text,Font,Size.Empty,TextFormatFlags.NoPadding|TextFormatFlags.SingleLine);
+            int icon=Symbol==0 ? 0 : Font.Height+(int)Math.Round(6*visualScale);
+            return new Size(Math.Max(MinimumSize.Width,caption.Width+Padding.Horizontal+icon+(int)Math.Round(6*visualScale)),
+                Math.Max(MinimumSize.Height,Font.Height+Padding.Vertical+(int)Math.Round(6*visualScale)));
+        }
         internal SurfaceButton()
         {
             FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; UseVisualStyleBackColor = false;
+            SetStyle(ControlStyles.SupportsTransparentBackColor,true);BackColor=Color.Transparent;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
         }
         protected override void OnMouseEnter(EventArgs e) { hovered = true; base.OnMouseEnter(e); Invalidate(); }
@@ -773,14 +1253,23 @@ namespace ScreenOffTray.Ui
         protected override void OnPaint(PaintEventArgs e)
         {
             if (SystemInformation.HighContrast) { base.OnPaint(e); return; }
-            e.Graphics.Clear(Parent == null ? Color.White : Parent.BackColor);
+            // WM_PRINTCLIENT can arrive without WM_ERASEBKGND. Reconstruct the
+            // parent surface on this DC before painting rounded corners.
+            if(Parent!=null) {
+                var saved=e.Graphics.Save();
+                try { e.Graphics.TranslateTransform(-Left,-Top);InvokePaintBackground(Parent,new PaintEventArgs(e.Graphics,Bounds)); }
+                finally { e.Graphics.Restore(saved); }
+            } else e.Graphics.Clear(MintTheme.Card);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             Color background = !Enabled ? Color.FromArgb(227,235,237) : Primary
                 ? (pressed ? Color.FromArgb(0,124,119) : hovered ? Color.FromArgb(0,124,119) : MintTheme.Green)
                 : (pressed ? Color.FromArgb(232,244,239) : hovered ? Color.FromArgb(232,243,242) : MintTheme.Soft);
             Color foreground = !Enabled ? Color.FromArgb(109,133,144) : Primary ? Color.White : Color.FromArgb(51,88,105);
             using (var path = Outline(ClientRectangle, Math.Max(5, Font.Height / 3))) {
-                using (var brush = new SolidBrush(background)) e.Graphics.FillPath(brush, path);
+                using (var brush = new LinearGradientBrush(ClientRectangle,
+                    Enabled && Primary ? Color.FromArgb(54,191,145) : background,
+                    Enabled && Primary ? Color.FromArgb(0,157,107) : background,90F)) e.Graphics.FillPath(brush, path);
+                if(Primary) using(var pen=new Pen(Color.FromArgb(0,139,91),Math.Max(1,visualScale))) e.Graphics.DrawPath(pen,path);
                 if (!Primary) using (var pen = new Pen(MintTheme.Field)) e.Graphics.DrawPath(pen, path);
             }
             var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
@@ -793,6 +1282,7 @@ namespace ScreenOffTray.Ui
                 using (var pen = new Pen(foreground,Math.Max(1,Font.Height/13F))) {
                     if (Symbol == 1) { e.Graphics.DrawArc(pen,left+1,top+1,size-2,size-2,-55,290); e.Graphics.DrawLine(pen,left+size/2,top,left+size/2,top+size/2); }
                     else if (Symbol == 2) { e.Graphics.DrawRectangle(pen,left+2,top+1,size/4,size-2); e.Graphics.DrawRectangle(pen,left+size*2/3,top+1,size/4,size-2); }
+                    else if (Symbol == 4) { e.Graphics.DrawLines(pen,new[] { new Point(left+2,top+size/2),new Point(left+size/2,top+size-3),new Point(left+size-2,top+2) }); }
                     else { e.Graphics.DrawPolygon(pen,new[] { new Point(left+2,top+1),new Point(left+size-1,top+size/2),new Point(left+2,top+size-1) }); }
                 }
                 textBounds = new Rectangle(left+size+gap,0,Width-left-size-gap,Height); flags &= ~TextFormatFlags.HorizontalCenter; flags |= TextFormatFlags.Left;

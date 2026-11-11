@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -16,6 +16,10 @@ namespace ScreenOffTray
     {
         internal string Profile = "", Zh, En, Diagnostics = "";
         internal bool MatchingLive, PhysicalOnly, Compatible;
+        internal bool VirtualModeMissing, ClonedDisplay, MetricsUnavailable;
+        internal uint PhysicalWidth, PhysicalHeight, PhysicalDpi, VirtualWidth, VirtualHeight, VirtualDpi;
+        internal string RequiredResolution = "";
+        internal bool PreparationBlocked { get { return VirtualModeMissing || MetricsUnavailable; } }
         internal DateTime CheckedUtc = DateTime.UtcNow;
         internal string Detail(bool english) { return english ? En : Zh; }
     }
@@ -40,9 +44,15 @@ namespace ScreenOffTray
         private bool recoveryUnresolved;
         private bool failedWithVerifiedOriginal;
         private bool autoAttemptFailed, unsupportedPreparation;
-        internal bool Preparing { get { return preparing; } }
-        internal bool CanPrepare { get { lock (autoSync) return !disposed && !checking && !preparing && !workerOccupied && !recoveryUnresolved; } }
-        internal bool WaitingForPreviousQuery { get { lock (autoSync) return workerOccupied && !preparing; } }
+        private volatile bool modeAdapting;
+        private int modeCancelled;
+        private string modeFailure = "";
+        internal bool Preparing { get { return preparing || modeAdapting; } }
+        internal bool CanPrepare { get { lock (autoSync) return !disposed && !checking && !Preparing && !workerOccupied && !queryWorker.Occupied && !recoveryUnresolved && (Result == null || !Result.PreparationBlocked); } }
+        // An old failed read must not veto a new explicit attempt. Each attempt
+        // obtains its own live requirement before any mode or CCD operation.
+        internal bool CanPrepareDisplay { get { lock (autoSync) return !disposed && !checking && !Preparing && !workerOccupied && !queryWorker.Occupied && !recoveryUnresolved; } }
+        internal bool WaitingForPreviousQuery { get { lock (autoSync) return (workerOccupied && !preparing) || (queryTimedOut && queryWorker.Occupied); } }
         // Integration may archive RecoveryPath only at SafeToArchive, and only
         // after GuardianStopConfirmation has completed with true.
         internal AutoSetupOutcome LastAutoOutcome { get; private set; }
@@ -75,11 +85,21 @@ namespace ScreenOffTray
         internal string Diagnostics { get; private set; }
         internal string Detail(bool english)
         {
+            if (modeAdapting) return english ? "Adapting the virtual display. Administrator confirmation may be needed and the screen may flicker. Cancellation or exit waits for the device operation to finish." : "正在适配虚拟屏，可能需要管理员确认、画面可能闪动。取消或退出会等待设备操作完成。";
             if (preparing) return english ? "Preparing safely. Please wait; cancellation also waits for recovery." : "正在安全准备，请稍候；取消后也会等待恢复完成。";
+            if(queryTimedOut && Result!=null)return Result.Detail(english);
             if (WaitingForPreviousQuery) return english ? "Preparation cancelled. Waiting for the previous query to return before retrying. You may exit normally." : "准备已取消，等待上一次查询返回后才能重试；现在可以正常退出。";
             if (recoveryUnresolved) return english ? "Display recovery is unverified. Display off stays disabled; retain the details." : "显示恢复尚未确认，关屏保持停用。请展开并保留详情。";
             if (IsReady) return english ? "Ready and enabled. Only the physical display is active." : "准备完成，已启用。当前仅实体屏输出。";
             if (checking) return english ? "Checking your displays. Please wait." : "正在检查显示配置，请稍候。";
+            if (!String.IsNullOrEmpty(modeFailure)) return (english ? "Display adaptation did not complete; display off stays disabled.\r\n" : "显示适配未完成，关屏保持停用。\r\n") + modeFailure;
+            if (autoAttemptFailed && LastAutoOutcome != null && !LastAutoOutcome.Success)
+                return english ? LastAutoOutcome.En : LastAutoOutcome.Zh;
+            if (Result != null && (Result.VirtualModeMissing || Result.ClonedDisplay || Result.MetricsUnavailable)) {
+                string restored = failedWithVerifiedOriginal ? (english ? "The previous layout was verified restored.\r\n" : "上次操作的原布局已确认恢复。\r\n") : "";
+                return restored + Result.Detail(english);
+            }
+            if (unsupportedPreparation && Result != null && (LastPreparationError ?? "").IndexOf("DPI", StringComparison.OrdinalIgnoreCase) >= 0) return Result.Detail(english);
             if (unsupportedPreparation) return failedWithVerifiedOriginal ?
                 (english ? "Automatic preparation is unsupported for this setup. The original layout was verified restored; display off stays disabled." : "当前配置不支持自动准备。原布局已确认恢复，关屏保持停用。") :
                 (english ? "Automatic preparation is unsupported for this setup. Display off stays disabled." : "当前配置不支持自动准备，关屏保持停用。");
@@ -89,7 +109,11 @@ namespace ScreenOffTray
         private int generation;
         private int settledGeneration = -1;
         private volatile bool ready;
-        private DateTime validUntil;
+        private long validUntil;
+        private readonly SingleReadOnlyWorker<DisplaySetupResult> queryWorker = new SingleReadOnlyWorker<DisplaySetupResult>();
+        private IDisposable queryDeadline;
+        private long queryId, queryStarted;
+        private bool queryTimedOut, queryAwaiting;
         private string observedProfile, completedProfile;
         private DateTime observedUtc;
         internal DisplaySetupResult Result { get; private set; }
@@ -98,13 +122,14 @@ namespace ScreenOffTray
         // attempt on a worker, before completion publication. Register only;
         // never wait for stopping or synchronously access UI from this callback.
         internal event Action<Task<bool>> RecoveryStopConfirmationAvailable;
-        internal bool HasVerifiedProfile { get { return ready && !disposed && !preparing && !recoveryUnresolved && DateTime.UtcNow < validUntil; } }
+        internal bool HasVerifiedProfile { get { return ready && !disposed && !Preparing && !recoveryUnresolved && autoClock.Milliseconds < validUntil; } }
         internal bool IsReady { get { return HasVerifiedProfile && !checking; } }
         internal bool Checking { get { return checking; } }
         // Invalidation and an in-flight refresh are not evidence of a failed check.
-        internal bool HasSettledResult { get { return !disposed && !checking && !preparing && Result != null && settledGeneration == generation; } }
+        internal bool HasSettledResult { get { return !disposed && !checking && !Preparing && Result != null && settledGeneration == generation; } }
         internal bool CanComplete { get; private set; }
-        internal DisplaySetupState(Action<Action> post) : this(post, new SettingsDisplayEvidenceStore(), delegate { return new AutoSetupNative(); }) { }
+        internal static IAutoSetupPlatform CreateDefaultAutoPlatform() { return new DpiMatchedAutoSetup(new AutoSetupNative()); }
+        internal DisplaySetupState(Action<Action> post) : this(post, new SettingsDisplayEvidenceStore(), CreateDefaultAutoPlatform) { }
         // Only these lifecycle callbacks may bypass the tray's exiting filter.
         // The dispatcher must still marshal to the UI and reject a disposed host.
         internal DisplaySetupState(Action<Action> post, Action<Action> completionPost) : this(post)
@@ -128,6 +153,7 @@ namespace ScreenOffTray
                 completedProfile = saved.Completed;
                 DateTime.TryParse(saved.Checked, CultureInfo.InvariantCulture,
                     DateTimeStyles.RoundtripKind, out observedUtc);
+                if(observedUtc > DateTime.UtcNow) { observedProfile = completedProfile = ""; observedUtc = DateTime.MinValue; }
             } catch (Exception ex) {
                 observedProfile = completedProfile = "";
                 Result = new DisplaySetupResult { Zh = "设置无法读取，请保留配置文件并按帮助修复；关屏已停用。\r\n" + ex.Message,
@@ -149,20 +175,28 @@ namespace ScreenOffTray
         }
         internal void Recheck()
         {
-            if (disposed || checking || preparing || WaitingForPreviousQuery || recoveryUnresolved) return;
-            checking = true; int token = generation;
+            if (disposed || checking || Preparing || WaitingForPreviousQuery || queryWorker.Occupied || recoveryUnresolved) return;
+            modeFailure = "";
+            checking = true; queryTimedOut = false; queryAwaiting = true; int token = generation; long id = ++queryId;
+            queryStarted = autoClock.Milliseconds;
+            queryDeadline = autoScheduler.Schedule(delegate { post(delegate { if(queryAwaiting) ExpireQuery(id); }); }, 30000);
             if (Changed != null) Changed();
-            Task.Run(delegate {
-                DisplaySetupResult result;
-                try { result = readOnlyProbe(); }
-                catch (Exception ex) { result = new DisplaySetupResult {
-                    Zh = "无法核实显示配置；关屏保持暂停。\r\n" + ex.Message,
-                    En = "Display setup could not be verified; display off stays paused.\r\n" + ex.Message,
-                    Diagnostics = ex.ToString() }; }
-                post(delegate {
-                    if (disposed) return;
+            if (!queryWorker.TryRead(readOnlyProbe, delegate(DisplaySetupResult value, Exception failure) {
+                post(async delegate {
+                    if (disposed || id != queryId) return;
+                    queryAwaiting = false;
+                    if (queryDeadline != null) { queryDeadline.Dispose(); queryDeadline = null; }
+                    if (queryTimedOut || autoClock.Milliseconds - queryStarted >= 30000) {
+                        ExpireQuery(id); if (Changed != null) Changed(); return;
+                    }
+                    if (token != generation) { checking=false; if(Changed!=null)Changed(); return; }
                     checking = false;
                     if (token != generation) { if (Changed != null) Changed(); return; }
+                    DisplaySetupResult result = value;
+                    if (failure != null || result == null) result = new DisplaySetupResult {
+                        Zh = "无法核实显示配置；关屏保持暂停。",
+                        En = "Display check failed; display off stays paused.",
+                        Diagnostics = failure == null ? "No display result" : failure.ToString() };
                     Result = result;
                     settledGeneration = token;
                     Diagnostics = String.IsNullOrEmpty(result.Diagnostics) ? result.Zh + "\r\n" + result.En : result.Diagnostics;
@@ -170,28 +204,57 @@ namespace ScreenOffTray
                         observedProfile = result.Profile; observedUtc = result.CheckedUtc;
                         // Extended mode is setup only, never the final operating baseline.
                         completedProfile = "";
-                        if (!SaveEvidence()) { ready = false; CanComplete = false; if (Changed != null) Changed(); return; }
+                        if (!await SaveEvidenceAsync()) { ready = false; CanComplete = false; if (Changed != null) Changed(); return; }
                     } else if (!result.PhysicalOnly || result.Profile != observedProfile) {
                         completedProfile = "";
                         if (!result.PhysicalOnly) observedProfile = "";
-                        if (!SaveEvidence()) { ready = false; CanComplete = false; if (Changed != null) Changed(); return; }
+                        if (!await SaveEvidenceAsync()) { ready = false; CanComplete = false; if (Changed != null) Changed(); return; }
                     }
+                    if(disposed || id!=queryId || token!=generation) {ready=false;return;}
                     CanComplete = !autoAttemptFailed && DisplayReadinessPolicy.CanComplete(result, observedProfile, observedUtc, DateTime.UtcNow);
                     ready = CanComplete && result.Profile == completedProfile;
-                    validUntil = DateTime.UtcNow.AddSeconds(35);
+                    validUntil = autoClock.Milliseconds + 35000;
                     if (Changed != null) Changed();
+
                 });
-            });
+            })) {
+                checking = false;
+                if (queryDeadline != null) { queryDeadline.Dispose(); queryDeadline = null; }
+                if (Changed != null) Changed();
+            }
+        }
+        private void ExpireQuery(long id)
+        {
+            if (disposed || id != queryId || queryTimedOut || (!queryAwaiting && autoClock.Milliseconds-queryStarted<30000)) return;
+            queryAwaiting = false; queryTimedOut = true; checking = false; ready = false; CanComplete = false;
+            if (queryDeadline != null) { queryDeadline.Dispose(); queryDeadline = null; }
+            Result = new DisplaySetupResult { Zh = "显示检查超过30秒，关屏保持暂停。原查询结束前不会重复启动。", En = "Display check timed out after 30 seconds; display off remains paused. Waiting for the original query.", Diagnostics = "read_only_query_timeout" };
+            Diagnostics = Result.Diagnostics; settledGeneration = generation;
+            if (Changed != null) Changed();
         }
         internal bool Complete()
         {
-            if (disposed || preparing || WaitingForPreviousQuery || recoveryUnresolved || checking || !CanComplete || Result == null || DateTime.UtcNow - Result.CheckedUtc > TimeSpan.FromSeconds(30)) return false;
+            if (evidence is SettingsDisplayEvidenceStore || disposed || Preparing || WaitingForPreviousQuery || recoveryUnresolved || checking || !CanComplete || Result == null || autoClock.Milliseconds - queryStarted >= 30000) return false;
             string oldCompleted = completedProfile;
             completedProfile = Result.Profile;
             if (!SaveEvidence()) { completedProfile = oldCompleted; ready = false; return false; }
-            ready = true; validUntil = DateTime.UtcNow.AddSeconds(35);
+            ready = true; validUntil = autoClock.Milliseconds + 35000;
             if (Changed != null) Changed();
             return true;
+        }
+        private async Task<bool> SaveEvidenceAsync()
+        {
+            var value=new DisplayEvidence {Observed=observedProfile,Checked=observedUtc.ToString("o",CultureInfo.InvariantCulture),Completed=completedProfile};
+            int token=generation;bool previousChecking=checking;checking=true;
+            try { await SaveEvidenceValueAsync(evidence,value);return !disposed && token==generation; }
+            catch(Exception ex) {Diagnostics=ex.ToString();ready=false;return false;}
+            finally {checking=previousChecking;}
+        }
+        private static Task SaveEvidenceValueAsync(IDisplayEvidenceStore store,DisplayEvidence value)
+        {
+            var real=store as SettingsDisplayEvidenceStore;
+            if(real!=null)return real.SaveAsync(value);
+            try {store.Save(value);return Task.FromResult(0);}catch(Exception ex){var failed=new TaskCompletionSource<bool>();failed.SetException(ex);return failed.Task;}
         }
         private bool SaveEvidence()
         {
@@ -199,7 +262,71 @@ namespace ScreenOffTray
                 evidence.Save(new DisplayEvidence { Observed = observedProfile, Checked = observedUtc.ToString("o", CultureInfo.InvariantCulture), Completed = completedProfile }); return true;
             } catch (Exception ex) { Diagnostics = ex.ToString(); ready = false; return false; }
         }
-        internal bool AutoPrepare()
+        // The explicit UI entry always does a fresh mode check, including inactive
+        // VDDs. Its lifetime is separate from the old 30s setup/CCD guardian.
+        internal bool PrepareDisplay() { return PrepareDisplay(delegate { return new VirtualModeNative(); }); }
+        internal bool PrepareDisplay(Func<IVirtualModePlatform> platform)
+        {
+            Task<bool> work=PrepareDisplayAsync(platform);
+            work.ContinueWith(delegate(Task<bool> done) {if(done.IsFaulted) OledPrototype.Program.Log("mode_prepare_dispatch_failed: "+done.Exception);},TaskScheduler.Default);
+            return work.IsCompleted ? work.GetAwaiter().GetResult() : true;
+        }
+        private async Task<bool> PrepareDisplayAsync(Func<IVirtualModePlatform> platform)
+        {
+            int token;
+            lock (autoSync) {
+                if (!CanPrepareDisplay) return false;
+                ready = false; CanComplete = false; modeFailure = "";
+                observedProfile = completedProfile = "";
+                token = ++generation; settledGeneration = -1;
+                modeCancelled = 0; modeAdapting = true;
+                LastPreparationError = ""; LastAutoOutcome = null;
+            }
+            if(!await SaveEvidenceAsync()) {
+                lock(autoSync) {modeAdapting=false;modeFailure=Diagnostics;}
+                if(Changed!=null)Changed();return false;
+            }
+            string notificationFailure = "";
+            try { if (Changed != null) Changed(); }
+            catch (Exception ex) {
+                // A presentation subscriber must not strand the gate before its
+                // worker exists. Keep the error with this operation's diagnostics.
+                notificationFailure = "\r\nmode_setup_notify_failed: " + ex;
+                lock (autoSync) Diagnostics += notificationFailure;
+            }
+            Task.Run(delegate { return VirtualModeAdaptation.Run(platform(), delegate { return disposed || Volatile.Read(ref modeCancelled) != 0 || generation != token; }); })
+                .ContinueWith(delegate(Task<VirtualModeAdaptationResult> work) {
+                    var result = work.IsFaulted ? new VirtualModeAdaptationResult { Error = work.Exception.GetBaseException().Message, Diagnostics = work.Exception.ToString() } : work.Result;
+                    result.Diagnostics = notificationFailure + result.Diagnostics;
+                    Action finish = delegate {
+                        lock (autoSync) {
+                            modeAdapting = false;
+                            if (disposed) return;
+                            ready = false; CanComplete = false; Result = null;
+                            Diagnostics = result.Diagnostics; settledGeneration = generation;
+                            if (!result.Success || Volatile.Read(ref modeCancelled) != 0 || generation != token) {
+                                modeFailure = LastPreparationError = String.IsNullOrEmpty(result.Error) ? "适配已取消或显示状态变化，请重新准备 / Adaptation cancelled or display changed; prepare again." : result.Error;
+                                Result = new DisplaySetupResult { Zh = modeFailure, En = modeFailure };
+                                if (Changed != null) Changed(); return;
+                            }
+                            // Construct AutoSetupNative and PlanCheck only AFTER
+                            // reload/readback. No pre-reload LUID snapshot exists.
+                            if (!AutoPrepare(result.Requirement, result.Verify)) {
+                                modeFailure = LastPreparationError = "未能开始受保护显示准备，请重新检查 / Could not start protected display preparation; check again.";
+                                Result = new DisplaySetupResult { Zh = modeFailure, En = modeFailure };
+                                if (Changed != null) Changed();
+                            }
+                        }
+                    };
+                    try { completionPost(finish); }
+                    catch (Exception ex) {
+                        lock (autoSync) { modeAdapting = false; ready = false; CanComplete = false; modeFailure = LastPreparationError = "完成通知失败 / Completion dispatch failed: " + ex.Message; Diagnostics += "\r\n" + result.Diagnostics + "\r\n" + ex; }
+                    }
+                }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+            return true;
+        }
+        internal bool AutoPrepare() { return AutoPrepare(null, null); }
+        private bool AutoPrepare(VirtualModeRequirement requirement, Action verifyMode)
         {
             AutoSetupAttempt current;
             DisplayEvidence previous;
@@ -221,18 +348,18 @@ namespace ScreenOffTray
                 AutoSetupOutcome outcome;
                 try {
                     current.Check();
-                    outcome = DisplayAutoSetup.Run(autoPlatform(), current, post,
+                    IAutoSetupPlatform native = autoPlatform();
+                    if (requirement != null) native = new ModeCheckedAutoSetup(native, requirement, verifyMode);
+                    outcome = DisplayAutoSetup.Run(native, current, post,
                         delegate(DisplaySetupResult live, DisplaySetupResult final) {
-                            return InvokeAutoUi(current, delegate {
-                                if (!AutoCurrent(current)) throw new OperationCanceledException();
-                                evidence.Save(new DisplayEvidence { Observed = live.Profile,
-                                    Checked = live.CheckedUtc.ToString("o", CultureInfo.InvariantCulture), Completed = final.Profile });
-                            }, false);
+                            if(!InvokeAutoUi(current,delegate {if(!AutoCurrent(current))throw new OperationCanceledException();},false))return false;
+                            SaveEvidenceValueAsync(evidence,new DisplayEvidence {Observed=live.Profile,Checked=live.CheckedUtc.ToString("o",CultureInfo.InvariantCulture),Completed=final.Profile}).GetAwaiter().GetResult();
+                            return true;
                         },
                         delegate { return InvokeAutoUi(current, delegate {
                             if (!AutoCurrent(current) || !current.TryCommit()) throw new OperationCanceledException();
                         }, false); },
-                        delegate { return InvokeAutoUi(current, delegate { evidence.Save(previous); }, true); });
+                        delegate { if(!InvokeAutoUi(current,delegate{},true))return false;SaveEvidenceValueAsync(evidence,previous).GetAwaiter().GetResult();return true; });
                 } catch (Exception ex) { outcome = new AutoSetupOutcome { Error = ex.Message, Diagnostics = ex.ToString(), RecoveryUnresolved = current.Guarded,
                     GuardianStopConfirmation = Task.FromResult(!current.Guarded),
                     Zh = "准备未完成，关屏保持停用，请保留诊断记录。", En = "Preparation did not complete; display off remains disabled. Retain diagnostics." }; }
@@ -342,7 +469,7 @@ namespace ScreenOffTray
                     if (finished.Success && dispatched && current.Generation == generation) {
                         Result = finished.Final; observedProfile = finished.Live.Profile; observedUtc = finished.Live.CheckedUtc;
                         completedProfile = finished.Final.Profile; ready = true; CanComplete = true;
-                        validUntil = DateTime.UtcNow.AddSeconds(35);
+                        validUntil = autoClock.Milliseconds + 35000;
                         Result.Zh = "准备完成，已启用。当前仅实体屏输出。";
                         Result.En = "Preparation complete and enabled. Only the physical display is active.";
                     } else {
@@ -375,6 +502,7 @@ namespace ScreenOffTray
         }
         internal void CancelPreparation()
         {
+            if (modeAdapting) Interlocked.Exchange(ref modeCancelled, 1);
             AutoSetupAttempt current; lock (autoSync) current = attempt;
             if (current != null) {
                 current.Cancel();
@@ -387,6 +515,8 @@ namespace ScreenOffTray
         {
             CancelPreparation();
             lock (autoSync) { disposed = true; ready = false; ++generation; }
+            if (queryDeadline != null) { queryDeadline.Dispose(); queryDeadline = null; }
+            queryWorker.Dispose();
             // Do not wait for, stop the clock of, or dispose state still read by
             // the worker. Its completion owns disposal of the deadline timer.
         }
@@ -414,19 +544,10 @@ namespace ScreenOffTray
             Settings.Default.DisplayProfileCheckedUtc = value.Checked;
             Settings.Default.CompletedDisplayProfile = value.Completed;
         }
-        public void Save(DisplayEvidence value)
-        {
-            // UI-thread-only transaction. Restore both ApplicationSettingsBase's
-            // cache and disk after a failed write; failure of either is reported.
-            DisplayEvidence previous = Load();
-            try { Assign(value); Settings.Default.Save(); }
-            catch (Exception write) {
-                Assign(previous);
-                try { Settings.Default.Save(); }
-                catch (Exception rollback) { throw new AggregateException("设置保存及回退失败 / Settings save and rollback failed.", write, rollback); }
-                throw new InvalidOperationException("设置保存失败，已回退缓存及配置 / Settings save failed; cache and configuration rolled back.", write);
-            }
-        }
+        public void Save(DisplayEvidence value) { SaveAsync(value).GetAwaiter().GetResult(); }
+        internal Task SaveAsync(DisplayEvidence value)
+        {return SerializedSettingsWriter.Default.UpdateAsync(delegate {Assign(value);});}
+
     }
     internal interface IAutoSetupClock { long Milliseconds { get; } }
     internal interface IAutoSetupScheduler { IDisposable Schedule(Action callback, int milliseconds); }
@@ -602,15 +723,21 @@ namespace ScreenOffTray
                 platform.Apply(plan.Original, plan.Extended, delegate { attempt.Check(); RequireGuardian(guardian); applied = true; });
                 var extended = platform.Capture(); DisplayAutoCcd.VerifyExtended(plan, extended);
                 attempt.Check(); RequireGuardian(guardian);
-                outcome.Live = ReadProof(platform);
+                outcome.Live = ReadSettledProof(delegate { return ReadProof(platform); },
+                    delegate(DisplaySetupResult r) { return r != null && r.MatchingLive && !String.IsNullOrEmpty(r.Profile); },
+                    delegate { attempt.Check(); RequireGuardian(guardian); }, delegate { return attempt.ElapsedMilliseconds; },
+                    delegate(int delay) { Thread.Sleep(delay); }, delegate(DisplaySetupResult value) { outcome.Live = value; });
                 if (!outcome.Live.MatchingLive || String.IsNullOrEmpty(outcome.Live.Profile))
-                    throw new AutoSetupUnsupportedException("不支持此配置：无法自动取得虚拟屏独立且一致的分辨率和缩放。不会写入缩放或降低实体屏模式。 / Unsupported: independent virtual resolution and DPI do not match; no DPI writes or physical mode reduction.");
+                    throw new AutoSetupUnsupportedException("不支持此配置：未能核实虚拟屏独立且一致的分辨率和缩放；不会降低实体屏模式。 / Unsupported: independent virtual resolution and DPI could not be verified; physical mode is unchanged.");
                 DisplayAutoCcd.VerifyExtended(plan, platform.Capture());
                 attempt.Check(); RequireGuardian(guardian);
                 platform.Apply(extended, plan.PhysicalOnly, delegate { attempt.Check(); RequireGuardian(guardian); });
                 DisplayBackend.VerifySnapshot(plan.PhysicalOnly, platform.Capture());
                 attempt.Check(); RequireGuardian(guardian);
-                outcome.Final = ReadProof(platform);
+                outcome.Final = ReadSettledProof(delegate { return ReadProof(platform); },
+                    delegate(DisplaySetupResult r) { return DisplayReadinessPolicy.CanComplete(r, outcome.Live.Profile, outcome.Live.CheckedUtc, DateTime.UtcNow); },
+                    delegate { attempt.Check(); RequireGuardian(guardian); }, delegate { return attempt.ElapsedMilliseconds; },
+                    delegate(int delay) { Thread.Sleep(delay); }, delegate(DisplaySetupResult value) { outcome.Final = value; });
                 if (!DisplayReadinessPolicy.CanComplete(outcome.Final, outcome.Live.Profile, outcome.Live.CheckedUtc, DateTime.UtcNow))
                     throw new AutoSetupUnsupportedException("不支持此配置：仅实体屏下的严格兼容校验或配置身份不一致 / Unsupported: strict physical-only compatibility or profile identity did not match.");
                 DisplayBackend.VerifySnapshot(plan.PhysicalOnly, platform.Capture());
@@ -659,6 +786,16 @@ namespace ScreenOffTray
                     outcome.En = "Automatic preparation is unsupported for this configuration. No display switch was applied; display off remains disabled.";
                 }
                 if (!settingsRestored) { outcome.Zh += " 设置回退未确认，请保留诊断记录。"; outcome.En += " Settings rollback is unverified; retain diagnostics."; }
+                if (outcome.Live != null && !outcome.Live.MatchingLive) {
+                    string measured = MeasurementSummary(outcome.Live, false);
+                    string measuredEn = MeasurementSummary(outcome.Live, true);
+                    outcome.Zh += "\r\n" + measured + "\r\n请在显示设置中匹配虚拟屏分辨率和缩放，再重新准备。";
+                    outcome.En += "\r\n" + measuredEn + "\r\nMatch the virtual display resolution and scale to the physical display in Windows Display Settings, then prepare again. Every attempt measures the current setup.";
+                }
+                if (outcome.Live == null && ex is AutoSetupUnsupportedException && ex.Message.IndexOf("DPI", StringComparison.OrdinalIgnoreCase) >= 0) {
+                    outcome.Zh += " 虚拟屏缩放未通过实测匹配。请查看诊断或在 Windows 显示设置中核对后重新准备。";
+                    outcome.En += " Virtual DPI matching was not verified. See diagnostics or check Windows Display Settings, then prepare again.";
+                }
                 // Native error details belong only in Diagnostics, not the main UI.
             } finally {
                 if (heartbeat != null) heartbeat.Dispose();
@@ -673,6 +810,8 @@ namespace ScreenOffTray
                     }
                 }
                 outcome.Diagnostics += "\r\n" + (plan == null ? "preflight_incomplete" : plan.Summary) + "\r\nrecovery=" + recoveryPath;
+                if (outcome.Live != null) outcome.Diagnostics += "\r\nextended_readback=" + MeasurementSummary(outcome.Live, true) + "\r\n" + outcome.Live.Diagnostics;
+                if (outcome.Final != null) outcome.Diagnostics += "\r\nfinal_readback=" + outcome.Final.Diagnostics;
                 outcome.RecoveryPath = recoveryPath;
                 outcome.SafeToArchive = !applied || restored || outcome.Success;
                 // Integration cleanup belongs here or in the caller: archive
@@ -696,6 +835,47 @@ namespace ScreenOffTray
         {
             try { return platform.Probe(); }
             catch (Exception ex) { throw new AutoSetupUnsupportedException("此配置无法自动取得可靠显示读数 / Reliable automatic display measurement is unsupported for this setup.", ex); }
+        }
+        // SetDisplayConfig returning is not a guarantee that monitor/DPI
+        // enumeration has settled. Re-read only; never re-APPLY, infer DPI or
+        // extend the outer 30s cancellation/recovery contract. Fake time in tests.
+        internal static DisplaySetupResult ReadSettledProof(Func<DisplaySetupResult> probe, Func<DisplaySetupResult,bool> accepts,
+            Action check, Func<long> milliseconds, Action<int> wait, Action<DisplaySetupResult> observed = null)
+        {
+            long started = milliseconds(); DisplaySetupResult last = null; Exception failure = null;
+            string acceptedProfile = null;
+            for (int n = 0; n < 21; n++) {
+                check();
+                if (milliseconds() - started >= 3000) break;
+                try {
+                    var result = probe();
+                    // Keep actual measurements even when cancellation, a slow
+                    // native call or a later enumeration error rejects the proof.
+                    if (result != null) { last = result; if (observed != null) observed(result); }
+                    check(); failure = null;
+                    if (milliseconds() - started > 3000) break;
+                    if (result != null && accepts(result)) {
+                        if (acceptedProfile == result.Profile) return result;
+                        acceptedProfile = result.Profile;
+                    } else acceptedProfile = null;
+                } catch (AutoSetupUnsupportedException ex) { failure = ex; acceptedProfile = null; }
+                if (milliseconds() - started >= 3000 || n == 20) break;
+                wait((int)Math.Max(0,Math.Min(150,3000 - (milliseconds() - started))));
+            }
+            check();
+            if (failure != null) throw failure;
+            if (last == null) throw new AutoSetupUnsupportedException("稳定校验未取得可用显示读数，请重试 / No usable display measurements arrived within the settling budget; retry.");
+            if (last != null && accepts(last)) throw new AutoSetupUnsupportedException("显示读数尚未稳定，请重试 / Display measurements did not settle; retry.");
+            return last;
+        }
+        internal static string MeasurementSummary(DisplaySetupResult result, bool english)
+        {
+            if (result == null || result.PhysicalDpi == 0 || result.VirtualDpi == 0)
+                return english ? "Independent virtual display measurements are not available yet." : "尚未取得虚拟屏的可靠独立读数。";
+            return (english ? "Physical: " : "实体屏：") + result.PhysicalWidth + " × " + result.PhysicalHeight + " / " +
+                (result.PhysicalDpi * 100.0 / 96).ToString("0.#",CultureInfo.InvariantCulture) + "%" +
+                (english ? "; virtual: " : "；虚拟屏：") + result.VirtualWidth + " × " + result.VirtualHeight + " / " +
+                (result.VirtualDpi * 100.0 / 96).ToString("0.#",CultureInfo.InvariantCulture) + "%";
         }
     }
 
@@ -885,6 +1065,42 @@ namespace ScreenOffTray
             foreach (var path in snapshot.Paths) if ((path.Flags & DisplayBackend.Active) == 0) throw new InvalidOperationException("Inactive APPLY path refused.");
         }
         public DisplaySetupResult Probe() { return DisplaySetupProbe.Probe(true); }
+        internal static string VirtualSource(string device)
+        {
+            var native = new AutoSetupNative(); var baseline = native.Capture();
+            var routes = Routes(Query(DisplayBackend.QueryAll));
+            string source = SelectedVirtualSource(baseline, routes, device, SourceName);
+            DisplayBackend.VerifySnapshot(baseline, native.Capture());
+            return source;
+        }
+        internal static string SelectedVirtualSource(DisplayBackend.Snapshot baseline, List<DisplayBackend.Route> routes, string device, Func<DisplayBackend.PathInfo, string> sourceName)
+        {
+            // Check target identity across ALL available candidates before source
+            // filtering, so a shared/proxy route cannot hide another target.
+            DisplayBackend.Route target = null;
+            var eligible = new List<DisplayBackend.Route>();
+            foreach (var route in routes) {
+                if (!route.Device.Available || !DisplayAutoCcd.SameText(route.Device.DevicePath, device)) continue;
+                if (target != null && !DisplayAutoCcd.SameTarget(target.Path, route.Path))
+                    throw new InvalidOperationException("DevicePath 对应多个不同 target，拒绝歧义选择 / DevicePath maps to different targets; ambiguous selection refused.");
+                target = route;
+                var path = route.Path;
+                if (path.Target.Available == 0 || path.Target.Technology != route.Device.Technology)
+                    throw new InvalidOperationException("虚拟路径身份与可用性不一致 / Virtual route identity or availability is inconsistent.");
+                if (!DisplayAutoCcd.SameLuid(path.Source.Adapter, path.Target.Adapter)) continue;
+                bool shared = false;
+                for (int i = 0; i < baseline.Paths.Length; i++)
+                    if (DisplayBackend.IsPhysical(baseline.Paths[i].Target.Technology, baseline.AdapterPaths[i]) &&
+                        DisplayAutoCcd.SameLuid(baseline.Paths[i].Source.Adapter, path.Source.Adapter) && baseline.Paths[i].Source.Id == path.Source.Id) shared = true;
+                if (!shared) eligible.Add(route);
+            }
+            if (target == null) throw new VirtualModeNotReadyException("虚拟显示路由尚未就绪 / Virtual display route is not ready.");
+            if (eligible.Count == 0) throw new InvalidOperationException("无法核实独立虚拟显示源 / Cannot verify an independent virtual source.");
+            // Keep BuildPlan's active/OS-priority policy within independent sources
+            // only. Enumerate one selected source; never the clone's physical GDI.
+            var plan = DisplayBackend.BuildPlan(baseline, eligible, device);
+            return sourceName(plan.Paths[0]);
+        }
         internal static void ValidateCompatibility(string device)
         {
             var native = new AutoSetupNative(); var baseline = native.Capture();
@@ -933,17 +1149,18 @@ namespace ScreenOffTray
                 uint pc, mc; uint flags = kind | DisplayBackend.QueryVirtualAware;
                 int error = GetDisplayConfigBufferSizes(flags, out pc, out mc);
                 if (error == 122) continue;
-                if (error != 0) throw new InvalidOperationException("GetDisplayConfigBufferSizes: " + error);
+                if (error != 0) throw VirtualModeNotReadyException.CcdError("GetDisplayConfigBufferSizes", error);
                 if (pc > DisplayBackend.MaxPaths || mc > DisplayBackend.MaxModes) throw new InvalidOperationException("CCD buffer limit exceeded.");
                 var paths = new DisplayBackend.PathInfo[pc]; var modes = new DisplayBackend.ModeInfo[mc];
                 uint pmax = pc, mmax = mc;
                 error = QueryDisplayConfig(flags, ref pc, paths, ref mc, modes, IntPtr.Zero);
                 if (error == 122) continue;
-                if (error != 0 || pc > pmax || mc > mmax) throw new InvalidOperationException("QueryDisplayConfig: " + error);
+                if (error != 0) throw VirtualModeNotReadyException.CcdError("QueryDisplayConfig", error);
+                if (pc > pmax || mc > mmax) throw new InvalidOperationException("QueryDisplayConfig buffer size exceeded.");
                 Array.Resize(ref paths, (int)pc); Array.Resize(ref modes, (int)mc);
                 return new DisplayBackend.Snapshot { Paths = paths, Modes = modes };
             }
-            throw new InvalidOperationException("显示布局持续变化 / Display layout is changing.");
+            throw new VirtualModeNotReadyException("CCD 枚举缓冲区尚未稳定 / CCD enumeration buffers are not ready.");
         }
         private static List<DisplayBackend.Route> Routes(DisplayBackend.Snapshot snapshot)
         {
@@ -953,7 +1170,7 @@ namespace ScreenOffTray
                 var adapter = new DisplayBackend.AdapterName { Header = Header(4, typeof(DisplayBackend.AdapterName), path.Target.Adapter, 0) };
                 int te = GetTargetName(ref target), ae = GetAdapterName(ref adapter);
                 if ((path.Target.Available != 0 || (path.Flags & 1) != 0) && (te != 0 || ae != 0 || String.IsNullOrWhiteSpace(target.DevicePath) || String.IsNullOrWhiteSpace(adapter.DevicePath)))
-                    throw new InvalidOperationException("显示身份读取失败 / Cannot verify display identity: " + te + "/" + ae);
+                    throw VirtualModeNotReadyException.CcdError("Cannot verify display identity", te, ae);
                 result.Add(new DisplayBackend.Route { Path = path, Device = new DisplayTarget {
                     DevicePath = target.DevicePath, AdapterPath = adapter.DevicePath, Name = target.FriendlyName,
                     Technology = path.Target.Technology, Active = (path.Flags & 1) != 0, Available = path.Target.Available != 0 } });
@@ -964,7 +1181,8 @@ namespace ScreenOffTray
         {
             var value = new DisplayBackend.SourceName { Header = Header(1, typeof(DisplayBackend.SourceName), path.Source.Adapter, path.Source.Id) };
             int error = GetSourceName(ref value);
-            if (error != 0 || String.IsNullOrWhiteSpace(value.GdiName)) throw new InvalidOperationException("Source identity unavailable: " + error);
+            if (error != 0) throw VirtualModeNotReadyException.CcdError("Source identity unavailable", error);
+            if (String.IsNullOrWhiteSpace(value.GdiName)) throw new VirtualModeNotReadyException("显示源名称尚未就绪 / Source name is not ready.");
             return value.GdiName;
         }
         private static bool ListsResolution(string source, uint width, uint height)
@@ -1010,6 +1228,43 @@ namespace ScreenOffTray
 
     internal static class DisplaySetupProbe
     {
+        internal static VirtualModeRequirement ReadModeRequirement(VirtualModeRequirement expected)
+        {
+            IntPtr prior = SetThreadDpiAwarenessContext(new IntPtr(-4));
+            if (prior == IntPtr.Zero) throw new InvalidOperationException("DPI-aware probing unavailable.");
+            try {
+                var outputs = ReadOutputs();
+                var physical = outputs.FindAll(delegate(Output o) { return o.Physical; });
+                var virtuals = outputs.FindAll(delegate(Output o) { return o.Mtt; });
+                if (physical.Count > 1 || virtuals.Count > 1)
+                    throw new InvalidOperationException("需要单个已启用实体屏和唯一虚拟屏 / One active physical display and one virtual display required.");
+                if (physical.Count == 0) throw new VirtualModeNotReadyException("实体显示路径尚未就绪 / Physical display path is not ready.");
+                var real = physical[0];
+                if (expected != null && !expected.PhysicalKey.StartsWith(real.Device + "|" + real.Adapter + "|", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("实体显示设备已变化 / Physical display identity changed.");
+                if (!real.Active) throw new VirtualModeNotReadyException("实体显示源尚未启用 / Physical display source is not active yet.");
+                ReadActiveMode(real); VirtualModeConfig.Dimensions(real.Width, real.Height);
+                string physicalKey = real.Device + "|" + real.Adapter + "|" + real.Dpi;
+                if (expected != null && (expected.Width != real.Width || expected.Height != real.Height || expected.Rotation != real.Path.Target.Rotation || !String.Equals(expected.PhysicalKey, physicalKey, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException("实体屏尺寸、方向或缩放已变化 / Physical dimensions, rotation or DPI changed.");
+                if (virtuals.Count == 0) throw new VirtualModeNotReadyException("虚拟显示路径尚未就绪 / Virtual display path is not ready.");
+                var vdd = virtuals[0];
+                if (expected != null && (!String.Equals(expected.VirtualDevice, vdd.Device, StringComparison.OrdinalIgnoreCase) || !String.Equals(expected.Instance, DisplayBackend.RootInstancePath(vdd.Adapter), StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException("虚拟设备身份已变化 / Virtual display identity changed.");
+                foreach (var other in outputs) if (other.Active && other != real && other != vdd)
+                    throw new InvalidOperationException("存在其他活动输出 / Another active output exists.");
+                if (real.Path.Target.Rotation < 1 || real.Path.Target.Rotation > 4) throw new InvalidOperationException("Unknown physical rotation.");
+                // CCD source dimensions already express portrait orientation.
+                // BuildPlan selects the independent virtual source even in clone.
+                string source = AutoSetupNative.VirtualSource(vdd.Device);
+                var modes = ListedResolutions(source);
+                if (modes.Count == 0) throw new VirtualModeNotReadyException("虚拟模式列表尚未就绪 / Virtual mode enumeration is not ready.");
+                if (Topology(outputs) != Topology(ReadOutputs())) throw new InvalidOperationException("Display changed while measuring.");
+                return new VirtualModeRequirement { Width = real.Width, Height = real.Height, Rotation = real.Path.Target.Rotation,
+                    PhysicalKey = physicalKey, VirtualDevice = vdd.Device,
+                    Instance = DisplayBackend.RootInstancePath(vdd.Adapter), Listed = modes.Contains(real.Width + "x" + real.Height) };
+            } finally { SetThreadDpiAwarenessContext(prior); }
+        }
         private sealed class Output
         {
             internal DisplayBackend.PathInfo Path;
@@ -1060,15 +1315,30 @@ namespace ScreenOffTray
                 ReadActiveMode(real);
                 string profile = real.Device + "|" + real.Adapter + "|" + real.Width + "x" + real.Height + "|" + real.Dpi + "|" + real.Path.Target.Rotation +
                     "|" + vdd.Device + "|" + vdd.Adapter + "|" + DriverVersion(vdd.Adapter);
-                var result = new DisplaySetupResult { Profile = profile, PhysicalOnly = !vdd.Active };
+                var result = new DisplaySetupResult { Profile = profile, PhysicalOnly = !vdd.Active,
+                    PhysicalWidth=real.Width, PhysicalHeight=real.Height, PhysicalDpi=real.Dpi };
                 string dimensions = real.Width + " × " + real.Height + " / " + (real.Dpi * 100.0 / 96).ToString("0.#", CultureInfo.InvariantCulture) + "%";
                 if (vdd.Active) {
-                    ReadActiveMode(vdd);
+                    string metricsFailure = null;
+                    try { ReadActiveMode(vdd); }
+                    catch (InvalidOperationException ex) { metricsFailure = ex.Message; }
+                    result.VirtualWidth=vdd.Width; result.VirtualHeight=vdd.Height; result.VirtualDpi=vdd.Dpi;
                     // Clone mode shares a source; it does not prove an independently set VDD scale.
                     bool independent = real.Source != vdd.Source;
                     result.MatchingLive = independent && real.Width == vdd.Width && real.Height == vdd.Height && real.Dpi == vdd.Dpi;
                     var listed = result.MatchingLive ? new List<string>() : ListedResolutions(vdd.Source);
                     bool unsupported = listed.Count > 0 && !listed.Contains(real.Width + "x" + real.Height);
+                    bool cloned = real.Source == vdd.Source || (metricsFailure != null && IsCurrentClone(outputs));
+                    DisplaySetupResult guidance = result.MatchingLive ? null : CreateVirtualGuidance(real.Width, real.Height,
+                        listed.ToArray(), cloned, metricsFailure != null && !cloned);
+                    if (guidance != null) {
+                        result.VirtualModeMissing = guidance.VirtualModeMissing;
+                        result.ClonedDisplay = guidance.ClonedDisplay;
+                        result.MetricsUnavailable = guidance.MetricsUnavailable;
+                        result.RequiredResolution = guidance.RequiredResolution;
+                        result.Zh = guidance.Zh; result.En = guidance.En;
+                        result.Diagnostics = guidance.Diagnostics + (metricsFailure == null ? "" : "\r\n" + metricsFailure);
+                    } else {
                     result.Zh = "实体屏：" + dimensions + "\r\n虚拟屏：" + vdd.Width + " × " + vdd.Height + " / " + (vdd.Dpi * 100.0 / 96).ToString("0.#") + "%\r\n" +
                         (result.MatchingLive ? "当前实测一致。请切回“仅在实体屏显示”，再重新检查。" : unsupported ?
                             "此配置不受支持：Windows 未列出与实体屏相同的虚拟屏分辨率。请关闭引导并保持关屏停用；不会修改现有驱动或降低实体屏分辨率。" :
@@ -1077,6 +1347,7 @@ namespace ScreenOffTray
                         (result.MatchingLive ? "Live readings match. Switch back to physical display only, then recheck." : unsupported ?
                             "Unsupported profile: Windows does not list a matching virtual resolution. Close setup and leave display off disabled. Existing driver settings and physical resolution will not be changed." :
                             "Readings differ or displays are cloned. Match only if Windows offers the same mode. If no matching option exists, this profile is unsupported; close setup and leave display off paused.");
+                    }
                 } else {
                     // Prepare builds and VALIDATEs a candidate only. No TurnOff, Restore,
                     // Recover, SaveRecovery or driver configuration change is permitted here.
@@ -1094,8 +1365,68 @@ namespace ScreenOffTray
                 // A concurrent Settings change must not publish a proof for an earlier topology.
                 var final = ReadOutputs();
                 if (Topology(outputs) != Topology(final)) throw new InvalidOperationException("探测期间显示配置变化，请重新检查 / Display setup changed during probing; recheck.");
+                result.Diagnostics += "\r\n" + DisplayAutoSetup.MeasurementSummary(result,true) + "; physical_source=" + real.Source + "; virtual_source=" + vdd.Source;
                 return result;
             } finally { SetThreadDpiAwarenessContext(prior); }
+        }
+        // Pure classification shared with isolated checks. A listed-mode gap is
+        // not permission to rewrite a reused driver's configuration or infer DPI.
+        internal static DisplaySetupResult CreateVirtualGuidance(uint width, uint height, string[] modes, bool cloned, bool metricsUnavailable)
+        {
+            string required = width.ToString(CultureInfo.InvariantCulture) + "x" + height.ToString(CultureInfo.InvariantCulture);
+            bool missing = modes != null && modes.Length > 0 && Array.IndexOf(modes, required) < 0;
+            if (!missing && !cloned && !metricsUnavailable) return null;
+            var result = new DisplaySetupResult { VirtualModeMissing = missing, ClonedDisplay = cloned,
+                MetricsUnavailable = metricsUnavailable, RequiredResolution = required };
+            string size = width.ToString(CultureInfo.InvariantCulture) + " × " + height.ToString(CultureInfo.InvariantCulture);
+            if (missing) {
+                result.Zh = "虚拟屏尚未提供 " + size + " 模式，暂时无法完成准备。\r\n请先匹配虚拟屏分辨率，再重新检查。关屏保持停用。";
+                result.En = "The virtual display does not offer " + size + ". Setup cannot finish yet.\r\nMatch its resolution, then check again. Display off remains disabled.";
+            } else if (metricsUnavailable) {
+                result.Zh = "暂时无法可靠读取虚拟屏的缩放。\r\n请检查显示连接后重试；确认完成前，关屏保持停用。";
+                result.En = "The virtual display's scale could not be verified.\r\nCheck the display connection and try again. Display off remains disabled.";
+            } else {
+                result.Zh = "当前实体屏与虚拟屏正在复制显示，尚未验证独立缩放。\r\n可继续一键准备：临时扩展虚拟屏完成匹配，再恢复为仅实体屏显示；期间画面可能闪动。";
+                result.En = "The physical and virtual displays are mirrored; independent scaling is not verified.\r\nSetup can temporarily extend the virtual display, match it, then return to physical display only. The screen may flicker.";
+            }
+            result.Diagnostics = "virtual_mode_missing=" + missing + "; cloned=" + cloned + "; metrics_unavailable=" + metricsUnavailable +
+                "; required=" + required + "; listed=" + String.Join(",", modes ?? new string[0]);
+            return result;
+        }
+        private static bool IsCurrentClone(List<Output> outputs)
+        {
+            // DATABASE_CURRENT supplies a topology id, not an APPLY. Match the
+            // returned monitor identities against the live query. Cross-adapter
+            // clones can use GPU proxy target/source ids in the database.
+            IntPtr topology = Marshal.AllocHGlobal(sizeof(uint));
+            try {
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    uint pc, mc;
+                    int error = GetDisplayConfigBufferSizes(4, out pc, out mc);
+                    if (error != 0 || pc > 256 || mc > 1024) return false;
+                    var paths = new DisplayBackend.PathInfo[pc]; var modes = new DisplayBackend.ModeInfo[mc];
+                    error = QueryDisplayConfig(4, ref pc, paths, ref mc, modes, topology);
+                    if (error == 122) continue;
+                    if (error != 0 || pc > paths.Length || mc > modes.Length || Marshal.ReadInt32(topology) != 2) return false;
+                    var active = new List<string>(); var saved = new List<string>();
+                    foreach (var output in outputs) if (output.Active) active.Add(output.Device);
+                    for (int i = 0; i < pc; i++) {
+                        var name = new DisplayBackend.TargetName { Header = Header(2, typeof(DisplayBackend.TargetName), paths[i].Target.Adapter, paths[i].Target.Id) };
+                        if (GetTargetName(ref name) != 0 || String.IsNullOrWhiteSpace(name.DevicePath)) return false;
+                        saved.Add(name.DevicePath);
+                    }
+                    return SameCloneDisplays(active.ToArray(), saved.ToArray());
+                }
+                return false;
+            } finally { Marshal.FreeHGlobal(topology); }
+        }
+        internal static bool SameCloneDisplays(string[] active, string[] saved)
+        {
+            if (active == null || saved == null || active.Length == 0 || active.Length != saved.Length) return false;
+            var devices = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string device in active) if (String.IsNullOrWhiteSpace(device) || !devices.Add(device)) return false;
+            foreach (string device in saved) if (String.IsNullOrWhiteSpace(device) || !devices.Remove(device)) return false;
+            return devices.Count == 0;
         }
         private static string Topology(List<Output> outputs)
         {
@@ -1115,13 +1446,15 @@ namespace ScreenOffTray
                 paths = new DisplayBackend.PathInfo[pc]; modes = new DisplayBackend.ModeInfo[mc];
                 error = QueryDisplayConfig(0x11, ref pc, paths, ref mc, modes, IntPtr.Zero);
             }
-            if (error != 0 || paths == null) throw new InvalidOperationException("QueryDisplayConfig: " + error);
+            if (error != 0) throw VirtualModeNotReadyException.CcdError("QueryDisplayConfig", error);
+            if (paths == null) throw new InvalidOperationException("QueryDisplayConfig returned no buffer.");
             var result = new List<Output>();
             for (int i = 0; i < pc; i++) {
                 var p = paths[i]; if (p.Target.Available == 0) continue;
                 var name = new DisplayBackend.TargetName { Header = Header(2, typeof(DisplayBackend.TargetName), p.Target.Adapter, p.Target.Id) };
                 var adapter = new DisplayBackend.AdapterName { Header = Header(4, typeof(DisplayBackend.AdapterName), p.Target.Adapter, 0) };
-                if (GetTargetName(ref name) != 0 || GetAdapterName(ref adapter) != 0) throw new InvalidOperationException("显示身份无法核实 / Cannot verify display identity.");
+                int targetError = GetTargetName(ref name), adapterError = GetAdapterName(ref adapter);
+                if (targetError != 0 || adapterError != 0) throw VirtualModeNotReadyException.CcdError("Cannot verify display identity", targetError, adapterError);
                 bool active = (p.Flags & 1) != 0;
                 Output existing = result.Find(delegate(Output o) { return o.Device == name.DevicePath; });
                 if (existing != null && (!active || existing.Active)) continue;
@@ -1136,7 +1469,8 @@ namespace ScreenOffTray
                         throw new InvalidOperationException("显示源模式无法核实 / Source mode cannot be verified.");
                     output.Width = modes[index].Source.Width; output.Height = modes[index].Source.Height;
                     var source = new DisplayBackend.SourceName { Header = Header(1, typeof(DisplayBackend.SourceName), p.Source.Adapter, p.Source.Id) };
-                    if (GetSourceName(ref source) != 0) throw new InvalidOperationException("显示源身份无法核实 / Source identity cannot be verified.");
+                    int sourceError = GetSourceName(ref source);
+                    if (sourceError != 0) throw VirtualModeNotReadyException.CcdError("Source identity cannot be verified", sourceError);
                     output.Source = source.GdiName;
                 }
                 result.Add(output);

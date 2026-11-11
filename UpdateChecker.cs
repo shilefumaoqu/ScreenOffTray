@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
@@ -34,7 +34,9 @@ namespace ScreenOffTray
     public sealed class UpdateChecker : IDisposable
     {
         private const int DefaultBodyLimit = 256 * 1024;
-        private readonly HttpClient client;
+        private HttpClient client;
+        private HttpMessageHandler pendingHandler;
+        private readonly object clientGate=new object();
         private readonly Uri endpoint;
         private readonly string repository;
         private readonly Version currentVersion;
@@ -55,9 +57,8 @@ namespace ScreenOffTray
             catch (ConfigurationErrorsException) { error = "Cannot read GitHubRepository configuration."; }
 
             // Per-client policy only: never alter ServicePointManager or system TLS settings.
-            var handler = new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false };
-            var checker = new UpdateChecker(repository, GetCurrentVersion(), handler,
-                TimeSpan.FromSeconds(10), DefaultBodyLimit);
+            var checker = new UpdateChecker(repository, GetCurrentVersion(), null,
+                TimeSpan.FromSeconds(10), DefaultBodyLimit, true);
             if (error != null) checker.configurationError = error;
             return checker;
         }
@@ -75,10 +76,12 @@ namespace ScreenOffTray
         // Owns and disposes handler. Injection is for isolated tests; production uses FromConfiguration.
         // Injected handlers must not follow redirects or supply credentials/cookies.
         public UpdateChecker(string repository, Version currentVersion, HttpMessageHandler handler,
-            TimeSpan timeout, int maxResponseBytes)
+            TimeSpan timeout, int maxResponseBytes) : this(repository,currentVersion,handler,timeout,maxResponseBytes,false) { }
+        private UpdateChecker(string repository,Version currentVersion,HttpMessageHandler handler,
+            TimeSpan timeout,int maxResponseBytes,bool lazyDefault)
         {
             if (currentVersion == null) throw new ArgumentNullException("currentVersion");
-            if (handler == null) throw new ArgumentNullException("handler");
+            if (handler == null && !lazyDefault) throw new ArgumentNullException("handler");
             if (timeout <= TimeSpan.Zero || timeout > TimeSpan.FromMinutes(1))
                 throw new ArgumentOutOfRangeException("timeout");
             if (maxResponseBytes < 1 || maxResponseBytes > 1024 * 1024)
@@ -95,9 +98,20 @@ namespace ScreenOffTray
                     endpoint = new Uri("https://api.github.com/repos/" + this.repository + "/releases/latest");
                 else configurationError = "GitHubRepository must be an owner/repo name.";
             }
-            client = new HttpClient(handler, true) { Timeout = Timeout.InfiniteTimeSpan };
+            pendingHandler=handler;
         }
 
+        private HttpClient GetClient()
+        {
+            lock(clientGate) {
+                if(Volatile.Read(ref disposed)!=0)throw new ObjectDisposedException("UpdateChecker");
+                if(client==null) {
+                    var handler=pendingHandler??new HttpClientHandler{AllowAutoRedirect=false,UseCookies=false};
+                    client=new HttpClient(handler,true){Timeout=Timeout.InfiniteTimeSpan};pendingHandler=null;
+                }
+                return client;
+            }
+        }
         private static bool ValidRepository(string value)
         {
             if (!Regex.IsMatch(value, @"\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9_.-]{1,100}\z"))
@@ -123,7 +137,7 @@ namespace ScreenOffTray
                         request.Headers.UserAgent.ParseAdd("ScreenOffTray/" + currentVersion);
                         request.Headers.Accept.ParseAdd("application/vnd.github+json");
                         request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
-                        using (var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead,
+                        using (var response = await GetClient().SendAsync(request, HttpCompletionOption.ResponseHeadersRead,
                             deadline.Token).ConfigureAwait(false))
                         {
                             deadline.Token.ThrowIfCancellationRequested();
@@ -239,7 +253,7 @@ namespace ScreenOffTray
         {
             if (Interlocked.Exchange(ref disposed, 1) != 0) return;
             lifetime.Cancel();
-            client.Dispose();
+            lock(clientGate){if(client!=null)client.Dispose();else if(pendingHandler!=null)pendingHandler.Dispose();pendingHandler=null;}
             lifetime.Dispose();
         }
     }

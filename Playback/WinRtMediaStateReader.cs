@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -27,6 +27,11 @@ namespace ScreenOffTray.Playback
         private readonly Func<long> clock;
         private Task<object> pending;
         private bool requested, failed;
+        private int failures, retryRequested;
+        private long retryAt;
+        private static readonly int[] RetryDelays = { 5000, 30000, 120000 };
+        internal string Diagnostic { get { return failures == 0 ? "" : "播放器暂停状态暂不可用，保护按音频判断 / Player pause state is unavailable; protection uses audio activity."; } }
+        internal void RequestRetry() { Interlocked.Exchange(ref retryRequested, 1); }
         private int disposed;
 
         internal WinRtMediaStateReader(Action changed) : this(new ReflectionMediaApi(), changed) { }
@@ -41,14 +46,19 @@ namespace ScreenOffTray.Playback
 
         public MediaStateSnapshot Read()
         {
-            if (Volatile.Read(ref disposed) != 0 || failed) return Unknown();
+            if (Volatile.Read(ref disposed) != 0) return Unknown();
+            if (Volatile.Read(ref retryRequested) != 0 && (pending == null || pending.IsCompleted)) {
+                Interlocked.Exchange(ref retryRequested, 0);
+                if (failures>0) { failed = false; requested = false; pending = null; retryAt = clock(); }
+            }
+            if (failed || (!requested && clock() < retryAt)) return Unknown();
             try
             {
                 if (!requested)
                 {
                     requested = true;
                     pending = request();
-                    if (pending == null) { failed = true; return Unknown(); }
+                    if (pending == null) { RequestFailed(); return Unknown(); }
                     pending.ContinueWith(Completed, new WeakReference(this), CancellationToken.None,
                         TaskContinuationOptions.None, TaskScheduler.Default);
                 }
@@ -56,21 +66,29 @@ namespace ScreenOffTray.Playback
                 if (pending.IsFaulted || pending.IsCanceled)
                 {
                     if (pending.IsFaulted) GC.KeepAlive(pending.Exception); // Observe even when the API is unavailable.
-                    failed = true; return Unknown();
+                    RequestFailed(); return Unknown();
                 }
                 object manager = pending.Result; // Only reached after completion; never waits.
-                if (manager == null) return Unknown();
+                if (manager == null) { RequestFailed(); return Unknown(); }
                 // The earliest status may already be old when later sessions finish.
                 long observedAt = clock();
                 MediaSessionStatus[] sessions = read(manager);
                 if (Volatile.Read(ref disposed) != 0 || sessions == null) return Unknown();
+                failures=0;
                 return new MediaStateSnapshot { Known = true, Sessions = sessions, ObservedMilliseconds = observedAt };
             }
             catch
             {
-                if (requested && pending == null) failed = true;
+                if (pending == null) RequestFailed();
                 return Unknown(); // Auxiliary failure never becomes an empty audio list.
             }
+        }
+
+        private void RequestFailed()
+        {
+            pending = null; requested = false;
+            if (failures < RetryDelays.Length) retryAt = clock() + RetryDelays[failures++];
+            else { failures++; failed = true; }
         }
 
         private MediaStateSnapshot Unknown()

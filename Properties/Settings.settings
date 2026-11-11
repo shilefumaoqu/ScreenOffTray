@@ -16,6 +16,7 @@
     <Setting Name="CompletedDisplayProfile" Type="System.String" Scope="User"><Value Profile="(Default)"></Value></Setting>
     <Setting Name="SetupIntroShown" Type="System.Boolean" Scope="User"><Value Profile="(Default)">False</Value></Setting>
     <Setting Name="SetupLastNoticeKey" Type="System.String" Scope="User"><Value Profile="(Default)"></Value></Setting>
+    <Setting Name="InterfaceTheme" Type="System.String" Scope="User"><Value Profile="(Default)">geometry</Value></Setting>
     <Setting Name="TimeoutMinutes" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">10</Value>
     </Setting>

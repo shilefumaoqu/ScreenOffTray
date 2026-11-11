@@ -1,3 +1,5 @@
+> ScreenOffTray 0.2.0 moves Settings into a separate Pane-styled WPF process with Geometry, Warm white and Black appearances. Existing driver, display-off, input recovery, playback protection and display preparation behavior is retained.
+
 # ScreenOffTray
 
 [简体中文](README.md)
@@ -6,19 +8,21 @@
 
 A Windows tray utility for OLED users who want the screen off while downloads, calculations and background work continue. Turn it off immediately with a shortcut, or automatically after physical keyboard and mouse inactivity. It does not lock, sleep, hibernate or shut down Windows.
 
-**[Download the Windows x64 installer · v0.1.9 pre-release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.1.9)**
+**[Download the Windows x64 installer · v0.2.0](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.0)**
 
-**0.1.9 pre-release** adds two-column mint Settings, an interactive cat and audio allowlist playback protection. Read [validation and known limits](docs/版本验证.md).
+**0.2.0** runs the Pane-styled UI in `ScreenOffTray.Settings.exe`, while the background process continues to own tray state, playback protection, hotkeys and display off. The previous `v0.1.9` and older installers remain available.
 
-![Settings window using isolated demo data; Chinese UI shown](docs/images/settings-zh.png)
+![English Geometry appearance using isolated demo data](docs/images/settings-en.png)
 
-Right-click opens a small menu with status and quick actions. Settings opens a separate mint window that can be moved, minimized and resized. Clicking outside does not close it. Closing Settings leaves the application running in the tray; only Exit ends the application. Basic settings and playback protection sit side by side and stack when space is narrow. Application icons come from their executable files. The cat stretches, licks a paw, tilts its head and reaches out; animation stops while the window is hidden or minimized. Ready startup remains silent. The installer continues into a focused first-time setup window: check displays, complete preparation, and confirm readiness. Failures remain in that window with next steps. Users can defer action; display off stays disabled until preparation is verified.
+Right-click opens a small menu with status and quick actions. Settings opens a separate Pane-styled WPF window with General, Playback protection and About pages. Geometry, Warm white and Black appearances are available; Geometry is the default and the choice is saved with the other settings. Application icons come from their executable files, while the header uses the supplied layered-moon icon. Closing Settings ends only that UI process; the tray application keeps running. Ready startup remains silent. The installer continues into the same Settings host: check displays, complete preparation, and confirm readiness. Users can defer action; display off stays disabled until preparation is verified.
+
+[Chinese UI](docs/images/settings-zh.png) · [Warm white](docs/images/settings-warm.png) · [Black](docs/images/settings-black.png)
 
 Targets **Windows 10 22H2 / Windows 11 x64 with one physical display** and requires .NET Framework 4.8 already installed. A virtual display driver keeps the desktop running. Its impact on automatic direct-discrete-GPU display switching on hybrid-GPU laptops remains unverified; evaluate compatibility if your workflow requires that feature.
 
 ## Get started
 
-1. Download `ScreenOffTray-0.1.9-Setup-x64.exe` from the Release, run it, and complete the Windows administrator prompt. Setup works offline and does not download the .NET runtime.
+1. Download `ScreenOffTray-0.2.0-Setup-x64.exe` from the Release, run it, and complete the Windows administrator prompt. Setup works offline and does not download the .NET runtime.
 2. On first launch, choose “Prepare and enable display off”. Preparation matches the physical display conditions and restores the layout. The display may flicker; avoid changing Windows display settings at the same time. If safe matching fails, display-off stays paused.
 3. Right-click the tray icon → Settings to change the timeout, shortcut, language and startup preference. Save applies ordinary drafts; Cancel or closing the window discards them. Whitelist edits are saved immediately. Display off is deferred while Settings is open and resumes its existing rules after closure. New users start with **10 minutes** and startup disabled.
 4. Press **Ctrl+Alt+F10**, or choose “Turn off now”. To customize the shortcut, focus its field in Settings, press a combination, release it and save.
@@ -53,11 +57,11 @@ The existing prototype audio detection is retained. A fresh, unambiguously match
 
 Chinese and English are available. Timeout, shortcut, language, startup and automatic update-check preferences are saved. Normal startup does not repeatedly open preparation; preparation and diagnostics are available in Settings.
 
-Settings includes the version, “Check for updates” and an automatic-check toggle. **The update source remains blank in this build**, so no update request is sent. Publishing this repository does not change installed configurations. With a valid source, checks only notify and provide a download link; they never install automatically. This pre-release is also excluded from GitHub's stable `releases/latest` endpoint.
+Settings includes the version, “Check for updates” and an automatic-check toggle. The update source is the stable GitHub Releases feed for `shilefumaoqu/ScreenOffTray`. Automatic checks are on by default and only notify with a download link; they never install automatically or exit the app. Existing settings are retained after upgrade, and older releases remain available.
 
 ## Development and verification
 
-Built with **.NET Framework 4.8 / C# 5 / WinForms**, with no additional runtime libraries. Run `打包安装版.cmd` in the repository root to build the offline installer. The first build downloads and verifies pinned tools. See [Build and verification](docs/构建与验证.md) for commands and English instructions.
+Built with **.NET Framework 4.8 / C# 5**. The tray and background use WinForms, while Settings runs in a separate WPF process; no additional runtime libraries are required. Run `打包安装版.cmd` in the repository root to build the offline installer. The first build downloads and verifies pinned tools. See [Build and verification](docs/构建与验证.md) for commands and English instructions.
 
 Historical evidence is in [Validation and limitations](docs/验证与限制.md); see [version validation](docs/版本验证.md) for targeted checks and remaining gaps. Isolated tests do not establish hardware compatibility or long-term stability. See [Release notes](RELEASE_NOTES.md).
 

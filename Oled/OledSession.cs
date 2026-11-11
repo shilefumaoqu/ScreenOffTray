@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -53,6 +53,9 @@ namespace OledPrototype
         private readonly Func<bool> displayReady;
         private readonly Func<PlaybackProtectionState> automaticProtection;
         internal event Action Changed;
+        internal Action ManualRequested;
+        internal Action PulseObserved;
+        internal Action<InputKind,int,bool> PhysicalObserved;
         internal event Action<string> Problem;
         internal event Action ExitReady;
         internal event Action<AutoOffPauseReason> AutomaticProtectionObserved;
@@ -63,9 +66,12 @@ namespace OledPrototype
         internal string UnavailableReason { get; private set; }
         internal bool IsBusy { get { return flow.Busy; } }
         internal bool CanStartSession { get { return !disposed && !flow.Busy && stopBarrier.Pending == 0 && !stopBarrier.Unconfirmed && System.Threading.Volatile.Read(ref outstandingRecoveryReaders) == 0; } }
+        internal bool IsSafeToExit { get { return !disposed && flow.ReadyToExit && stopBarrier.Pending == 0; } }
         internal bool ExitRetryAvailable { get { return !disposed && exitNotifications.Failed; } }
         internal Task PendingMaintenance { get { lock (pendingMaintenance) return Task.WhenAll(pendingMaintenance.ToArray()); } }
         internal HotkeyBinding Hotkey { get { return hotkeys.Hotkey; } }
+        internal bool HotkeyRegistered {get {return hotkeys.Registered;}}
+        internal bool HooksAvailable {get {return hooksAvailable;}}
         internal string StateText { get {
             switch (flow.Phase) {
                 case SessionPhase.Preparing: return "准备关屏 / Preparing";
@@ -111,7 +117,7 @@ namespace OledPrototype
             // incomplete hook pair must remain disabled for this lifetime.
             if (!hooksAvailable) ReleaseHooks();
             heartbeat.Interval = 100;
-            heartbeat.Tick += delegate { Tick(); };
+            heartbeat.Tick += delegate { Tick(); if(PulseObserved!=null) PulseObserved(); };
             heartbeat.Start();
         }
 
@@ -128,6 +134,14 @@ namespace OledPrototype
                 Report("新快捷键已保存并生效，但旧注册清理失败，旧组合可能仍被本程序占用 / The new hotkey is saved and active, but cleanup of an old registration failed; its combination may still be reserved by this app.");
             return true;
         }
+
+        internal bool TryReserveHotkey(HotkeyBinding binding,out HotkeyRegistration.Reservation ticket,out string error)
+        {
+            ticket=null;
+            if(disposed || !hooksAvailable) {error="键鼠监听不可用 / Input hooks unavailable";return false;}
+            return hotkeys.TryReserve(binding,flow.Busy,HasHeldInput,out ticket,out error);
+        }
+        internal void RefreshHotkeyAvailability() {Supported=hotkeys.Registered && hooksAvailable; if(Supported) UnavailableReason=null;}
 
         private sealed class WindowHotkeyRegistrar : IHotkeyRegistrar
         {
@@ -473,11 +487,12 @@ namespace OledPrototype
             try { observer(reason); }
             catch (Exception ex) { Program.Log("automatic_protection_observer_failed: " + ex.Message); }
         }
-        private void ObservePhysicalActivity(InputKind kind, bool injected)
+        private void ObservePhysicalActivity(InputKind kind, bool injected, int id = 0)
         {
             // Reuse the existing physical/injected classification; observing the
             // idle clock never changes wake, swallow or pairing decisions.
             physicalActivity.Observe(injected);
+            if (PhysicalObserved != null) { try { PhysicalObserved(kind,id,injected); } catch { } }
             if (!injected) physicalInputVersion = unchecked(physicalInputVersion + 1);
             PreparationAttempt attempt = preparation;
             if (attempt != null && attempt.ObservePhysicalActivity(kind, injected)) {
@@ -629,13 +644,13 @@ namespace OledPrototype
                     catch { /* UI observation must never affect input/session handling. */ }
                 }
                 hotkeyInput.Observe((int)e.vkCode, up, injected);
-                ObservePhysicalActivity(up ? InputKind.KeyUp : InputKind.KeyDown, injected);
+                ObservePhysicalActivity(up ? InputKind.KeyUp : InputKind.KeyDown, injected, (int)e.vkCode);
                 if (!injected && e.vkCode == Hotkey.Key) {
                     if (hotkeyHeld) { if (up) hotkeyHeld = false; return new IntPtr(1); }
                     if (Supported && inputReady && !hotkeys.Changing && gate.CanStartHotkey(Hotkey.Key) &&
                         hotkeyInput.Matches(Hotkey, (int)e.vkCode, up, injected, CurrentModifiers())) {
                         hotkeyHeld = true;
-                        BeginInvoke(new Action(delegate { TryBegin(false); })); return new IntPtr(1);
+                        BeginInvoke(new Action(delegate { if(ManualRequested!=null) ManualRequested(); else TryBegin(false); })); return new IntPtr(1);
                     }
                 }
                 return Decide(up ? InputKind.KeyUp : InputKind.KeyDown, (int)e.vkCode, injected, keyboardHook, code, w, l);
@@ -667,7 +682,7 @@ namespace OledPrototype
                     case 0x20C: kind = InputKind.ButtonUp; id = ((e.mouseData >> 16) & 1) != 0 ? 260 : 261; break;
                     case 0x20A: case 0x20E: kind = InputKind.Wheel; break;
                 }
-                ObservePhysicalActivity(kind, (e.flags & 3) != 0);
+                ObservePhysicalActivity(kind, (e.flags & 3) != 0, id);
                 return Decide(kind, id, (e.flags & 3) != 0, mouseHook, code, w, l);
             } catch { if (flow.Busy) BeginInvoke(new Action(Wake)); return Native.CallNextHookEx(mouseHook, code, w, l); }
         }

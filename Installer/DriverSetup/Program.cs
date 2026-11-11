@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Security.Principal;
 using System.Text;
@@ -18,10 +19,21 @@ namespace ScreenOffTray.DriverSetup
             {
                 if (args.Length == 1 && args[0] == "--self-test") { SelfTest.Run(); return 0; }
                 if (!Environment.Is64BitProcess) throw new InvalidOperationException("x64 helper required");
+                if(args.Length==3 && args[0]=="--verify-processes" && args[1]=="--app-dir" && Path.IsPathRooted(args[2])) {CheckStopped(Path.GetFullPath(args[2]));Output(new{status="verified-stopped",readOnly=true});return 0;}
                 if (args.Length == 1 && args[0] == "--probe") return Probe();
+                if ((args.Length == 1 || (args.Length == 3 && args[1] == "--app-dir" && Path.IsPathRooted(args[2]))) && (args[0] == "--verify-existing" || args[0] == "--verify-first-install-pending")) {
+                    if (args.Length == 3) {
+                        CheckStopped(Path.GetFullPath(args[2]));
+                        Policy.Bundle(Path.Combine(Path.GetFullPath(args[2]),"Driver"));
+                    }
+                    var devices = Native.Enumerate(); var receipt = StateStore.Read(StateStore.DefaultRoot);
+                    if (args[0] == "--verify-first-install-pending") VerifyFirstInstallPending(devices,receipt);
+                    else VerifyExisting(devices, receipt);
+                    Output(new { status = "verified-existing", readOnly = true }); return 0;
+                }
                 if (args.Length != 3 || (args[0] != "install" && args[0] != "uninstall") || args[1] != "--bundle-dir" || !Path.IsPathRooted(args[2]))
                 {
-                    Output(new { status = "usage", contract = "--probe | --self-test | install --bundle-dir ABSOLUTE_DRIVER_DIRECTORY | uninstall --bundle-dir ABSOLUTE_DRIVER_DIRECTORY" }); return 2;
+                    Output(new { status = "usage", contract = "--verify-existing | --probe | --self-test | install --bundle-dir ABSOLUTE_DRIVER_DIRECTORY | uninstall --bundle-dir ABSOLUTE_DRIVER_DIRECTORY" }); return 2;
                 }
                 if (!new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))
                     throw new UnauthorizedAccessException("Run install/uninstall elevated; probe/self-test require no elevation");
@@ -36,7 +48,34 @@ namespace ScreenOffTray.DriverSetup
             catch (UnauthorizedAccessException ex) { Output(new { status = "permission-error", error = ex.Message }); return 5; }
             catch (Exception ex) { Output(new { status = "failed", error = ex.Message, recovery = StateStore.DefaultRoot }); return 20; }
         }
+        internal static bool IsProductProcess(string directory,string executable)
+        {return Policy.Same(Path.Combine(directory,"ScreenOffTray.exe"),executable) || Policy.Same(Path.Combine(directory,"ScreenOffTray.Settings.exe"),executable);}
+        private static void CheckStopped(string directory)
+        {
+            foreach(string name in new[]{"ScreenOffTray","ScreenOffTray.Settings"})foreach(Process process in Process.GetProcessesByName(name))using(process) {
+                try{if(!process.HasExited && IsProductProcess(directory,process.MainModule.FileName))throw new InvalidOperationException("Application, settings UI or recovery watchdog is still running; exit normally before updating");}
+                catch(System.ComponentModel.Win32Exception){throw new InvalidOperationException("Cannot establish running process identity; update stopped");}
+            }
+        }
         internal static void Output(object value) { Console.WriteLine(new JavaScriptSerializer().Serialize(value)); }
+        // Pure validation: do not instantiate StateStore (its constructor writes).
+        internal static void VerifyExisting(List<Device> items, Receipt receipt)
+        {
+            if (Policy.Select(items) != "reuse") throw new InvalidOperationException("Existing driver is absent, ambiguous or unusable; application-only update stopped");
+            if (receipt == null) return; // Unowned reusable device remains unowned.
+            if (receipt.Schema != Policy.Product || receipt.NeedsReboot ||
+                !Policy.Same(receipt.InstanceId, items[0].InstanceId) ||
+                (receipt.Owned ? receipt.Phase != "installed" : receipt.Phase != "reused"))
+                throw new InvalidOperationException("Existing driver receipt is pending or inconsistent; no changes made");
+            if (receipt.Owned) Policy.AssertOwned(receipt, items[0]);
+        }
+        internal static void VerifyFirstInstallPending(List<Device> items, Receipt receipt)
+        {
+            if (Policy.Select(items) != "reuse" || receipt == null || receipt.Schema != Policy.Product ||
+                !receipt.Owned || receipt.Phase != "reboot-pending" || !receipt.NeedsReboot)
+                throw new InvalidOperationException("Not a resumable first installation; no changes made");
+            Policy.AssertOwned(receipt,items[0]);
+        }
         private static int Probe()
         {
             List<Device> items = Native.Enumerate();

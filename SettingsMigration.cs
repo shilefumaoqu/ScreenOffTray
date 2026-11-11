@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
@@ -22,6 +22,7 @@ namespace ScreenOffTray
         internal static SettingsMigrationResult Begin()
         {
             var result = new SettingsMigrationResult();
+            int? importedTimeout=null;
             try {
                 if (Settings.Default.MigrationComplete) return result;
                 string destination = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.PerUserRoamingAndLocal).FilePath;
@@ -33,19 +34,25 @@ namespace ScreenOffTray
                         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) }, destination, out failed);
                     result.Choices.AddRange(values);
                     if (failed) { result.CanFinish = false; result.Warning = "部分旧设置无法读取 / Some previous settings could not be read."; }
-                    else if (values.Count == 1) { Settings.Default.TimeoutMinutes = result.Choices[0]; }
+                    else if (values.Count == 1) { importedTimeout=result.Choices[0]; }
                     else if (values.Count > 1) result.NeedsChoice = true;
                 }
                 // No enable-on-install. An existing, proven old executable alone can be rewritten.
-                MigrateStartup();
-                if (!result.NeedsChoice && result.CanFinish) Finish();
+                SerializedSettingsWriter.Default.UpdateAsync(delegate {
+                    MigrateStartup();
+                    if(importedTimeout.HasValue)Settings.Default.TimeoutMinutes=importedTimeout.Value;
+                    if(!result.NeedsChoice && result.CanFinish)Settings.Default.MigrationComplete=true;
+                }).GetAwaiter().GetResult();
             } catch (Exception ex) {
                 result.CanFinish = false;
                 result.Warning = "设置迁移未完成 / Settings migration incomplete: " + ex.Message;
             }
             return result;
         }
-        internal static void Finish() { Settings.Default.MigrationComplete = true; Settings.Default.Save(); }
+        internal static void Finish(int? minutes=null) { SerializedSettingsWriter.Default.UpdateAsync(delegate {
+            if(minutes.HasValue)Settings.Default.TimeoutMinutes=minutes.Value;
+            Settings.Default.MigrationComplete = true;
+        }).GetAwaiter().GetResult(); }
         internal static SortedSet<int> FindLegacyTimeouts(string[] roots, string destination, out bool failed)
         {
             var values = new SortedSet<int>(); failed = false;

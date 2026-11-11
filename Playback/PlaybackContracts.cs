@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 
 namespace ScreenOffTray.Playback
@@ -19,11 +19,13 @@ namespace ScreenOffTray.Playback
         public string Warning { get; set; }
         public AudioSource[] Sources { get; set; }
         public DateTime SampleUtc { get; set; }
+        internal long SampleTicks;
+        internal bool HasMonotonicSample;
 
         internal static AudioSnapshot Unknown(string error)
         {
             return new AudioSnapshot { Known = false, Error = error,
-                Sources = new AudioSource[0], SampleUtc = DateTime.UtcNow };
+                Sources = new AudioSource[0], SampleUtc = DateTime.UtcNow, SampleTicks = System.Diagnostics.Stopwatch.GetTimestamp(), HasMonotonicSample = true };
         }
     }
 

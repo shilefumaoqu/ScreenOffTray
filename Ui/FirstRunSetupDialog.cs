@@ -8,6 +8,8 @@ namespace ScreenOffTray.Ui
     internal sealed class FirstRunSetupState
     {
         internal bool Checking, Preparing, Ready, CanPrepare;
+        internal bool VirtualModeMissing, ClonedDisplay, MetricsUnavailable;
+        internal string RequiredResolution;
         internal string Detail, Diagnostics, Evidence;
     }
 
@@ -48,13 +50,13 @@ namespace ScreenOffTray.Ui
             this.text = text; this.prepare = prepare; this.cancelPrepare = cancelPrepare; this.recheck = recheck;
             this.openDisplaySettings = openDisplaySettings; this.openInstallationHelp = openInstallationHelp;
             Text = text.Pick("ScreenOffTray · 首次使用设置", "ScreenOffTray · First-time setup");
-            Font = new Font(text.English ? "Segoe UI" : "Microsoft YaHei UI", 9.5F); ownedFonts.Add(Font);
-            headingFont = new Font(Font.FontFamily, 13F, FontStyle.Bold); ownedFonts.Add(headingFont);
+            Font = new Font(text.English ? "Segoe UI" : "Microsoft YaHei UI", 10.5F); ownedFonts.Add(Font);
+            headingFont = new Font(Font.FontFamily, 15F, FontStyle.Bold); ownedFonts.Add(headingFont);
             statusFont = new Font(Font, FontStyle.Bold); ownedFonts.Add(statusFont);
             if (applicationIcon != null) { ownedIcon = (Icon)applicationIcon.Clone(); Icon = ownedIcon; }
             StartPosition = FormStartPosition.CenterScreen; ShowInTaskbar = true;
             MinimizeBox = false; MaximizeBox = false; AutoScaleMode = AutoScaleMode.None;
-            BackColor = MintTheme.Paper; ForeColor = MintTheme.Ink; ClientSize = new Size(450, 310);
+            BackColor = MintTheme.Paper; ForeColor = MintTheme.Ink; ClientSize = new Size(460, 280);
             MinimumSize = new Size(300, 230);
             body = new Panel { Name = "body", Dock = DockStyle.Fill, AutoScroll = true, BackColor = MintTheme.Paper };
             header = new Panel { Name = "header", Dock = DockStyle.Top, Height = 58, BackColor = MintTheme.Header };
@@ -77,7 +79,7 @@ namespace ScreenOffTray.Ui
             Controls.Add(body); Controls.Add(footer); Controls.Add(header);
             primary.Click += delegate { InvokeRoute(primaryRoute); };
             secondary.Click += delegate { InvokeRoute(secondaryRoute); };
-            displayLink.LinkClicked += delegate { InvokeRoute(Route.Display); };
+            displayLink.LinkClicked += delegate { InvokeRoute(current.VirtualModeMissing ? Route.Help : Route.Display); };
             disclosure.LinkClicked += delegate { ToggleDetails(); };
             body.SizeChanged += delegate { LayoutBody(); };
             footer.SizeChanged += delegate { LayoutFooter(); };
@@ -103,16 +105,16 @@ namespace ScreenOffTray.Ui
             if (dpi <= 0 || systemDpi <= 0) return;
             uiScale = dpi / 96F;
             float fontScale = (float)dpi / systemDpi;
-            Font next = new Font(text.English ? "Segoe UI" : "Microsoft YaHei UI", 9.5F * fontScale);
-            Font nextHeading = new Font(next.FontFamily, 13F * fontScale, FontStyle.Bold);
+            Font next = new Font(text.English ? "Segoe UI" : "Microsoft YaHei UI", 10.5F * fontScale);
+            Font nextHeading = new Font(next.FontFamily, 15F * fontScale, FontStyle.Bold);
             Font nextStatus = new Font(next, FontStyle.Bold);
             headingFont = nextHeading; statusFont = nextStatus; ownedFonts.Add(next); ownedFonts.Add(nextHeading); ownedFonts.Add(nextStatus); Font = next; heading.Font = nextHeading; status.Font = nextStatus;
             MinimumSize = new Size((int)Math.Round(300 * uiScale), (int)Math.Round(230 * uiScale));
-            ClientSize = new Size((int)Math.Round(450 * uiScale), (int)Math.Round((expanded ? 414 : 310) * uiScale));
+            ClientSize = new Size((int)Math.Round(460 * uiScale), (int)Math.Round((expanded ? 380 : 280) * uiScale));
             header.Height = Units(58);
             productIcon.SetBounds(Units(20), Units(13), Units(32), Units(32));
             heading.Location = new Point(Units(62), Math.Max(0, (header.Height - heading.Height) / 2));
-            LayoutBody(); LayoutFooter(); }
+            LayoutBody(); LayoutFooter(); AdjustContentHeight(); }
         private int Units(int value) { return Math.Max(1, (int)Math.Round(value * uiScale)); }
         private void FitWorkArea()
         {
@@ -222,7 +224,8 @@ namespace ScreenOffTray.Ui
             // Fresh physical/component evidence still gates automatic preparation.
             primaryRoute = secondaryRoute = Route.None;
             primary.Visible = secondary.Visible = true; primary.Enabled = secondary.Enabled = true;
-            physicalLinkVisible = physical && !state.Preparing && !state.Checking && !state.Ready;
+            physicalLinkVisible = (state.VirtualModeMissing || (physical && !state.MetricsUnavailable)) && !state.Preparing && !state.Checking && !state.Ready && !prepareRequested;
+            displayLink.Text = state.VirtualModeMissing ? text.Pick("查看解决方法", "View solutions") : text.Pick("打开显示设置", "Open display settings");
             displayLink.Visible = physicalLinkVisible;
             if (state.Ready && !state.Preparing && !state.Checking) {
                 status.Text = text.Pick("已就绪", "Ready"); description.Text = text.Pick("配置已完成，可以开始使用。", "Setup is complete. You're ready to go.");
@@ -234,6 +237,16 @@ namespace ScreenOffTray.Ui
                 status.Text = text.Pick("正在检查…", "Checking…"); description.Text = text.Pick("正在检查显示和准备情况。", "Checking the display and setup status.");
                 primary.Text = text.Pick("检查中…", "Checking…"); primary.Enabled = false;
                 secondary.Text = text.Pick("稍后处理", "Not now"); secondaryRoute = Route.Close;
+            } else if (state.VirtualModeMissing) {
+                status.Text = text.Pick("需要匹配虚拟屏分辨率", "Match the virtual display resolution");
+                description.Text = state.CanPrepare ? text.Pick("按当前实体屏尺寸补充虚拟模式，再完成受保护准备。可能需要管理员确认，画面可能闪动。缩放仍须实测匹配。", "Add a virtual mode matching your physical display, then run protected setup. Administrator confirmation may be needed and the screen may flicker. DPI must still match measured values.") : FriendlyDetail(state.Detail, text.Pick("请重新检查显示条件。", "Check display requirements again."));
+                primary.Text = state.CanPrepare ? text.Pick("自动适配显示", "Adapt display automatically") : text.Pick("重新检查", "Check again"); primaryRoute = state.CanPrepare ? Route.Prepare : Route.Recheck;
+                secondary.Text = text.Pick("稍后处理", "Not now"); secondaryRoute = Route.Close;
+            } else if (state.MetricsUnavailable) {
+                status.Text = text.Pick("暂时无法读取虚拟屏", "Virtual display is temporarily unavailable");
+                description.Text = FriendlyDetail(state.Detail, text.Pick("请稍后重新检查。", "Please check again later."));
+                primary.Text = text.Pick("重新检查", "Check again"); primaryRoute = Route.Recheck;
+                secondary.Text = text.Pick("稍后处理", "Not now"); secondaryRoute = Route.Close;
             } else if (physical) {
                 status.Text = text.Pick("需要检查显示条件", "Check display requirements"); description.Text = text.Pick("需要一个已启用的实体屏。\r\n若通过虚拟屏远程操作，可先稍后处理，实体屏恢复后再检查。无需重复安装。", "One active physical display is required.\r\nIf using a virtual display remotely, check again when the physical display is available. You can do this later; no need to reinstall.");
                 primary.Text = text.Pick("重新检查", "Check again"); primaryRoute = Route.Recheck;
@@ -242,6 +255,12 @@ namespace ScreenOffTray.Ui
                 status.Text = text.Pick("组件需要检查", "Component needs attention"); description.Text = text.Pick("所需组件可能缺失、不可用或存在冲突，请查看安装帮助。", "The required component may be missing, unavailable, or conflicting. See installation help.");
                 primary.Text = text.Pick("安装帮助", "Installation help"); primaryRoute = Route.Help;
                 secondary.Text = text.Pick("重新检查", "Check again"); secondaryRoute = Route.Recheck;
+            } else if (state.ClonedDisplay) {
+                status.Text = text.Pick("需要完成显示准备", "Display preparation needed");
+                description.Text = state.CanPrepare ? FriendlyDetail(state.Detail, text.Pick("当前显示处于复制模式。准备时会临时扩展虚拟屏，完成匹配后回到仅实体屏显示，期间画面可能闪动。", "Displays are currently mirrored. Setup temporarily extends the virtual display, matches it, then returns to physical display only. The screen may flicker.")) : FriendlyDetail(state.Detail, text.Pick("请重新检查显示准备情况。", "Check the display setup again."));
+                primary.Text = state.CanPrepare ? text.Pick("一键完成配置", "Complete setup") : text.Pick("重新检查", "Check again");
+                primaryRoute = state.CanPrepare ? Route.Prepare : Route.Recheck;
+                secondary.Text = text.Pick("稍后处理", "Not now"); secondaryRoute = Route.Close;
             } else {
                 status.Text = text.Pick("显示准备", "Display setup");
                 description.Text = FriendlyDetail(state.Detail, state.CanPrepare ? text.Pick("完成配置后即可使用，显示可能短暂闪动。", "Complete setup to get started. Your display may flicker briefly.") : text.Pick("请重新检查准备情况。", "Check the setup status again."));
@@ -249,11 +268,18 @@ namespace ScreenOffTray.Ui
                 primaryRoute = state.CanPrepare ? Route.Prepare : Route.Recheck;
                 secondary.Text = text.Pick("稍后处理", "Not now"); secondaryRoute = Route.Close;
             }
-            if (priorityDetail && !state.Ready && !state.Preparing && !state.Checking && !prepareRequested && (physical || component))
+            if (priorityDetail && !state.Ready && !state.Preparing && !state.Checking && !prepareRequested && !state.VirtualModeMissing && !state.MetricsUnavailable && (physical || component))
                 description.Text = FriendlyDetail(state.Detail, "") + Environment.NewLine + description.Text;
             diagnostics.Text = CombineDetails(state.Detail, state.Diagnostics); disclosure.Visible = !String.IsNullOrWhiteSpace(diagnostics.Text);
             UpdateDisclosure(); LayoutBody(); LayoutFooter();
+            AdjustContentHeight();
             if (Visible && !IsDisposed) FitWorkArea();
+        }
+        private void AdjustContentHeight()
+        {
+            int desired = header.Height + footer.Height + body.AutoScrollMinSize.Height + Units(8);
+            int min = Units(260), max = Units(expanded ? 430 : 330);
+            ClientSize = new Size(ClientSize.Width, Math.Max(min, Math.Min(max, desired)));
         }
         private static string CombineDetails(string detail, string extra)
         {

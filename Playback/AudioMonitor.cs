@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -40,8 +40,8 @@ namespace ScreenOffTray.Playback
             if (pollMilliseconds < 1 || timeoutMilliseconds < 1) throw new ArgumentOutOfRangeException("pollMilliseconds");
             if (native)
             {
-                mediaState = new WinRtMediaStateReader(RequestRefresh);
-                readerFactory = delegate { return new PauseAwareAudioReader(new CoreAudioReader(RequestRefresh), mediaState,
+                mediaState = new WinRtMediaStateReader(SignalRefresh);
+                readerFactory = delegate { return new PauseAwareAudioReader(new CoreAudioReader(SignalRefresh), mediaState,
                     delegate { return new WindowsMediaSourceResolver(); }, MediaClock.Milliseconds); };
             }
             else readerFactory = factory;
@@ -62,13 +62,21 @@ namespace ScreenOffTray.Playback
                 if (IsReading && ElapsedMilliseconds(Interlocked.Read(ref readStarted)) > timeoutMilliseconds)
                     return AudioSnapshot.Unknown("音频读取超时，暂缓自动关屏判断");
                 AudioSnapshot snapshot = latest;
-                if ((DateTime.UtcNow - snapshot.SampleUtc).TotalSeconds > 15)
+                if (snapshot.HasMonotonicSample ? (Stopwatch.GetTimestamp() < snapshot.SampleTicks || ElapsedMilliseconds(snapshot.SampleTicks) > 15000) : (snapshot.SampleUtc > DateTime.UtcNow || (DateTime.UtcNow - snapshot.SampleUtc).TotalSeconds > 15))
                     return AudioSnapshot.Unknown("音频状态已过期，暂缓自动关屏判断");
                 return snapshot;
             }
         }
 
+        internal event Action Changed;
+        internal string AuxiliaryWarning { get { var reader = mediaState as WinRtMediaStateReader; return reader == null ? "" : reader.Diagnostic; } }
         public void RequestRefresh()
+        {
+            var reader = mediaState as WinRtMediaStateReader;
+            if (reader != null) reader.RequestRetry();
+            SignalRefresh();
+        }
+        private void SignalRefresh()
         {
             lock (signalGate) { if (!handlesClosed && disposed == 0) refresh.Set(); }
         }
@@ -106,7 +114,11 @@ namespace ScreenOffTray.Playback
                     if (next == null) next = AudioSnapshot.Unknown("音频读取没有返回状态");
                     if (ElapsedMilliseconds(Interlocked.Read(ref readStarted)) > timeoutMilliseconds)
                         next = AudioSnapshot.Unknown("音频读取超时，暂缓自动关屏判断");
-                    if (Interlocked.CompareExchange(ref disposed, 0, 0) == 0) latest = next;
+                    if (Interlocked.CompareExchange(ref disposed, 0, 0) == 0) {
+                        latest = next;
+                        var handler = Changed;
+                        if (handler != null) foreach (Action subscriber in handler.GetInvocationList()) { try { subscriber(); } catch { } }
+                    }
                     Interlocked.Exchange(ref completed, 1);
                     Interlocked.Exchange(ref reading, 0);
                     int signal = WaitHandle.WaitAny(new WaitHandle[] { stop, refresh }, pollMilliseconds);
@@ -260,7 +272,7 @@ namespace ScreenOffTray.Playback
                     result.Add(source.Build(name));
                 }
                 result.Sort(delegate(AudioSource a, AudioSource b) { return StringComparer.OrdinalIgnoreCase.Compare(a.DisplayName, b.DisplayName); });
-                return new AudioSnapshot { Known = true, Sources = result.ToArray(), SampleUtc = DateTime.UtcNow,
+                return new AudioSnapshot { Known = true, Sources = result.ToArray(), SampleUtc = DateTime.UtcNow, SampleTicks = Stopwatch.GetTimestamp(), HasMonotonicSample = true,
                     UnidentifiedSourceCount = unidentified.Count,
                     Warning = unidentified.Count == 0 ? null : "有 " + unidentified.Count + " 个正在活动的音频进程因访问被拒绝无法确认身份，来源列表不完整；这些来源不参与白名单匹配。" };
             }
@@ -296,6 +308,7 @@ namespace ScreenOffTray.Playback
         {
             private AudioNative.IAudioSessionManager2 manager;
             private SessionSink sink;
+            private bool enumerated;
             private readonly Dictionary<string, Session> sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
             private readonly Action changed;
 
@@ -321,6 +334,16 @@ namespace ScreenOffTray.Playback
 
             internal void Collect(SourceCollection sources)
             {
+                // GetSessionEnumerator creates controls for every session. Initialize
+                // once after registration/GetCount, then maintain our private list
+                // with the existing notifications. State polling still runs each read.
+                if (!enumerated) { EnumerateInitialSessions(); enumerated = true; }
+                PurgeExpired();
+                CollectCurrentSessions(sources);
+            }
+
+            private void EnumerateInitialSessions()
+            {
                 AudioNative.IAudioSessionEnumerator current = null;
                 try
                 {
@@ -329,7 +352,6 @@ namespace ScreenOffTray.Playback
                     AudioNative.Check(manager.GetSessionEnumerator(out current));
                     int count; AudioNative.Check(current.GetCount(out count));
                     if (count < 0 || count > 1024) throw new InvalidOperationException("Too many audio sessions");
-                    PurgeExpired();
                     for (int i = 0; i < count; i++)
                     {
                         AudioNative.IAudioSessionControl control;
@@ -338,6 +360,10 @@ namespace ScreenOffTray.Playback
                     }
                 }
                 finally { AudioNative.Release(current); }
+            }
+
+            private void CollectCurrentSessions(SourceCollection sources)
+            {
                 IntPtr[] pending = sink.Drain();
                 try
                 {
@@ -400,7 +426,10 @@ namespace ScreenOffTray.Playback
                 foreach (var entry in sessions)
                 {
                     int state; int hr = entry.Value.Control.GetState(out state);
-                    if (hr < 0 || state == 2) expired.Add(entry.Key);
+                    // A failed read is uncertainty, not evidence of expiry. Let the
+                    // monitor fail closed and recreate its reader/list on this path.
+                    AudioNative.Check(hr);
+                    if (state == 2) expired.Add(entry.Key);
                 }
                 foreach (string id in expired) { sessions[id].Close(); sessions.Remove(id); }
             }
