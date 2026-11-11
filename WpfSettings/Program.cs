@@ -90,7 +90,7 @@ namespace ScreenOffTray.SettingsUi
             bool en=language=="en";var first=state.Sources==null?null:state.Sources.FirstOrDefault();
             window.SetStatus(en?state.StatusEn:state.StatusZh,first==null?(en?"No apps playing":"暂无正在播放的程序"):first.Name,
                 first==null?"":(en?"Playing":"正在播放"),en?state.ProtectionEn:state.ProtectionZh);
-            window.SetPlaybackState(state.PlaybackLimitReached);
+            window.SetPlaybackState(state.PlaybackLimitReached,state.UserPaused);
             window.SetList(state.Whitelist??new string[0]);window.SetSources(state.Sources,state.AudioKnown);window.SetUpdate(en?state.UpdateEn:state.UpdateZh);
             window.SetMigrationChoices(state.MigrationChoices);window.SetListBusy(listChanging || state.SavingWhitelist);
             window.ShowSetup(state.Ready,state.Checking,state.Preparing,state.CanPrepare,en?state.DetailEn:state.DetailZh,state.Diagnostics);

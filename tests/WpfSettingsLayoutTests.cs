@@ -56,9 +56,12 @@ internal static class WpfSettingsLayoutTests
                 Check(Field<StackPanel>(window,"PlayingRows").Children.Count>0,tag+" renders the isolated current playback row");
                 var summary=Field<TextBlock>(window,"PlaybackSummary");
                 Check(summary.Text.Contains(english?"add an app":"加入白名单后"),tag+" does not claim an unlisted playing app is protected");
-                window.SetSources(new[]{new PlayingSource{Path=paths[0],Name="Fixture player",Protected=true}},true);
+                window.SetSources(new[]{new PlayingSource{Path=paths[0],Name="Fixture player",Whitelisted=true,Protected=true}},true);
                 Check(summary.Text.Contains(english?"paused":"已暂停"),tag+" reports a backend-confirmed protected app");
-                window.SetPlaybackState(true);
+                window.SetSources(new[]{new PlayingSource{Path=paths[0],Name="Fixture player",Whitelisted=true,Protected=false}},true);
+                window.SetPlaybackState(false,true);
+                Check(summary.Text.Contains(english?"manually paused":"手动暂停"),tag+" distinguishes manual pause from an unlisted app");
+                window.SetPlaybackState(true,false);
                 Check(summary.Text.Contains(english?"limit reached":"上限已到"),tag+" reports that the playback limit ended protection");
 
                 foreach(string theme in new[]{"geometry","warm","black","geometry"}) {
@@ -74,6 +77,12 @@ internal static class WpfSettingsLayoutTests
             }
             window=new SettingsWindow(false,new Size(640,360));
             Check(window.Width<=608 && window.Height<=328,"small work area caps the window instead of enforcing a larger minimum");
+            window.Show();
+            await window.Dispatcher.InvokeAsync(delegate{},DispatcherPriority.ApplicationIdle);
+            var reset=Field<Button>(window,"ResetHotkeyButton");
+            var resetBounds=reset.TransformToAncestor(window).TransformBounds(new Rect(0,0,reset.ActualWidth,reset.ActualHeight));
+            Check(reset.IsVisible && resetBounds.Left>=0 && resetBounds.Right<=window.ActualWidth+1,"compact sidebar keeps fixed-width controls reachable");
+            Check(window.FindName("GeneralNavText").Equals(null)==false && ((TextBlock)window.FindName("GeneralNavText")).Visibility==Visibility.Collapsed,"compact sidebar keeps navigation tooltips with collapsed labels");
             window.Close();window=null;
             File.WriteAllText(Path.Combine(output,"ready-ms.txt"),"0");
             File.AppendAllText(Path.Combine(output,"results.txt"),"Checks="+checks+"; private non-input desktop; fake data and callbacks; no hooks, APPLY, formal settings or display access."+Environment.NewLine);

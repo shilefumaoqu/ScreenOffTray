@@ -34,7 +34,7 @@ namespace ScreenOffTray.SettingsUi
         private readonly ObservableCollection<WhitelistItem> whitelistItems=new ObservableCollection<WhitelistItem>();
         private readonly Dictionary<string,SourceRow> sourceRows=new Dictionary<string,SourceRow>(StringComparer.OrdinalIgnoreCase);
         private readonly ApplicationIcons icons;
-        private bool settingValues,closed,migrationNeeded,listBusy,viewBusy,playbackLimitReached;
+        private bool settingValues,closed,migrationNeeded,listBusy,viewBusy,playbackLimitReached,userPaused;
         private string migrationKey,listKey,sourcesKey,backgroundMode="geometry";
         private PlayingSource[] currentSources=new PlayingSource[0];
         private string[] appliedWhitelist=new string[0];
@@ -84,9 +84,11 @@ namespace ScreenOffTray.SettingsUi
             EnglishChoice.Click+=OnLanguageChoice;
             ProtectionLimitSwitch.Checked+=delegate{ProtectionMinutesInput.IsEnabled=true;};
             ProtectionLimitSwitch.Unchecked+=delegate{ProtectionMinutesInput.IsEnabled=false;};
+            SizeChanged+=delegate{ApplyResponsiveLayout();};
             ApplyBackground(backgroundMode);
             SetSources(new PlayingSource[0],true);
             ApplyBusy();
+            ApplyResponsiveLayout();
         }
 
         private string T(string zh,string en){return english?en:zh;}
@@ -206,7 +208,7 @@ namespace ScreenOffTray.SettingsUi
         internal void SetSources(PlayingSource[] sources,bool known)
         {
             sources=sources??new PlayingSource[0];
-            string next=(known?"known":"unknown")+"\n"+String.Join("\n",sources.Select(source=>source.Path+"\0"+source.Name+"\0"+(source.Protected?"1":"0")));
+            string next=(known?"known":"unknown")+"\n"+String.Join("\n",sources.Select(source=>source.Path+"\0"+source.Name+"\0"+(source.Whitelisted?"1":"0")+(source.Protected?"1":"0")));
             if(sourcesKey==next)return;sourcesKey=next;currentSources=sources;
             var identities=new HashSet<string>(sources.Select(source=>source.Path),StringComparer.OrdinalIgnoreCase);
             foreach(string path in sourceRows.Keys.Where(path=>!identities.Contains(path)).ToArray())
@@ -219,6 +221,8 @@ namespace ScreenOffTray.SettingsUi
                 var status=new TextBlock{Text=playbackLimitReached
                     ?T("正在播放 · 播放保护上限已到，不再暂停关屏","Playing · protection limit reached; auto off is no longer paused")
                     :source.Protected?T("正在播放 · 自动关屏已暂停","Playing · automatic display off is paused")
+                    :userPaused && source.Whitelisted?T("正在播放 · 自动关屏已手动暂停","Playing · automatic display off is manually paused")
+                    :source.Whitelisted?T("正在播放 · 播放保护当前未生效","Playing · playback protection is not currently active")
                     :T("正在播放 · 尚未加入白名单，不暂停关屏","Playing · not protected; auto off is not paused"),
                     FontSize=12,Foreground=(Brush)FindResource("Text2"),Margin=new Thickness(0,3,0,0)};
                 var text=new StackPanel{VerticalAlignment=VerticalAlignment.Center};text.Children.Add(name);text.Children.Add(status);
@@ -237,17 +241,35 @@ namespace ScreenOffTray.SettingsUi
                 ?(sources.Length==0?T("当前没有程序正在播放音频","No app is currently playing audio")
                     :playbackLimitReached?T("播放保护上限已到，不再暂停自动关屏","Protection limit reached; automatic display off is no longer paused")
                     :sources.Any(source=>source.Protected)?T("检测到白名单程序正在播放，自动关屏已暂停","An allowlisted app is playing; automatic display off is paused")
+                    :userPaused && sources.Any(source=>source.Whitelisted)?T("白名单程序正在播放；自动关屏已被手动暂停","An allowlisted app is playing; automatic display off is manually paused")
+                    :sources.Any(source=>source.Whitelisted)?T("白名单程序正在播放，播放保护当前未生效","An allowlisted app is playing; playback protection is not currently active")
                     :T("检测到程序正在播放音频，加入白名单后才暂停自动关屏","Audio is playing; add an app to pause automatic display off"))
                 :T("播放状态暂不可用，自动关屏将保持暂停","Playback state is unavailable; automatic display off remains paused");
             UpdateIcons();UpdateSourceButtons();
         }
 
-        public void SetPlaybackState(bool limitReached)
+        public void SetPlaybackState(bool limitReached,bool pausedByUser)
         {
-            if(playbackLimitReached==limitReached)return;
+            if(playbackLimitReached==limitReached && userPaused==pausedByUser)return;
             playbackLimitReached=limitReached;
+            userPaused=pausedByUser;
             sourcesKey=null;
             SetSources(currentSources,true);
+        }
+
+        private void ApplyResponsiveLayout()
+        {
+            if(SidebarColumn==null)return;
+            double width=ActualWidth>0?ActualWidth:Width;
+            bool compact=width<760;
+            SidebarColumn.Width=new GridLength(compact?88:216);
+            Visibility labels=compact?Visibility.Collapsed:Visibility.Visible;
+            BrandText.Visibility=labels;
+            GeneralNavText.Visibility=labels;
+            PlaybackNavText.Visibility=labels;
+            AboutNavText.Visibility=labels;
+            SidebarStatusText.Visibility=labels;
+            SidebarCheckText.Visibility=labels;
         }
 
         public void SetStatus(string ready,string source,string caption,string protection)

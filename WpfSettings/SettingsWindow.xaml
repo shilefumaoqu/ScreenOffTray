@@ -47,7 +47,7 @@
       </Border.Background>
       <Grid>
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="216"/>
+          <ColumnDefinition x:Name="SidebarColumn" Width="216"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
@@ -61,27 +61,27 @@
 
             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="11,0,11,28">
               <Image Source="Assets/app-icon.png" Width="38" Height="38" Margin="0,0,10,0" Stretch="Uniform"/>
-              <TextBlock Text="ScreenOffTray" FontSize="16" FontWeight="SemiBold"
+              <TextBlock x:Name="BrandText" Text="ScreenOffTray" FontSize="16" FontWeight="SemiBold"
                          Foreground="{DynamicResource Text1}" VerticalAlignment="Center"/>
             </StackPanel>
 
             <StackPanel Grid.Row="1">
-              <RadioButton x:Name="GeneralNav" Style="{StaticResource NavButton}" IsChecked="True" GroupName="SettingsPage" Tag="general" Click="OnNavClick">
+              <RadioButton x:Name="GeneralNav" Style="{StaticResource NavButton}" IsChecked="True" GroupName="SettingsPage" Tag="general" ToolTip="通用" Click="OnNavClick">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="17" Height="17" Stroke="{DynamicResource Accent}" StrokeThickness="1.75" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M12 8 A4 4 0 1 0 12 16 A4 4 0 1 0 12 8 M19 12 L21 12 M3 12 L5 12 M12 3 L12 5 M12 19 L12 21 M16.95 7.05 L18.36 5.64 M5.64 18.36 L7.05 16.95 M16.95 16.95 L18.36 18.36 M5.64 5.64 L7.05 7.05" Stretch="Uniform"/>
-                  <TextBlock Text="通用" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="GeneralNavText" Text="通用" Margin="12,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
               </RadioButton>
-              <RadioButton x:Name="PlaybackNav" Style="{StaticResource NavButton}" GroupName="SettingsPage" Tag="playback" Click="OnNavClick">
+              <RadioButton x:Name="PlaybackNav" Style="{StaticResource NavButton}" GroupName="SettingsPage" Tag="playback" ToolTip="播放保护" Click="OnNavClick">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="17" Height="17" Stroke="{DynamicResource Text2}" StrokeThickness="1.75" StrokeLineJoin="Round" Data="M8 5 L19 12 L8 19 Z" Stretch="Uniform"/>
-                  <TextBlock Text="播放保护" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="PlaybackNavText" Text="播放保护" Margin="12,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
               </RadioButton>
-              <RadioButton x:Name="AboutNav" Style="{StaticResource NavButton}" GroupName="SettingsPage" Tag="about" Click="OnNavClick">
+              <RadioButton x:Name="AboutNav" Style="{StaticResource NavButton}" GroupName="SettingsPage" Tag="about" ToolTip="关于" Click="OnNavClick">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="17" Height="17" Stroke="{DynamicResource Text2}" StrokeThickness="1.75" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M12 11 L12 17 M12 7 L12 7.2" Stretch="Uniform"/>
-                  <TextBlock Text="关于" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="AboutNavText" Text="关于" Margin="12,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
               </RadioButton>
             </StackPanel>
@@ -91,7 +91,7 @@
               <StackPanel Orientation="Horizontal">
                 <Ellipse x:Name="SidebarStatusDot" Width="7" Height="7" Fill="{DynamicResource Success}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                 <TextBlock x:Name="SidebarStatusText" Text="显示已就绪" Foreground="{DynamicResource Text1}" FontSize="12"/>
-                <TextBlock Text="检查" Foreground="{DynamicResource Accent}" FontSize="12" Margin="12,0,0,0"/>
+                <TextBlock x:Name="SidebarCheckText" Text="检查" Foreground="{DynamicResource Accent}" FontSize="12" Margin="12,0,0,0"/>
               </StackPanel>
             </Button>
           </Grid>
@@ -213,7 +213,7 @@
                       </StackPanel>
                       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBox x:Name="HotkeyInput" Text="Ctrl + Alt + F10" Style="{StaticResource InputBox}" Width="150" TextAlignment="Center" PreviewKeyDown="OnHotkeyPreviewKeyDown" GotKeyboardFocus="OnHotkeyGotFocus" ToolTip="聚焦后直接按新的实体快捷键"/>
-                        <Button Style="{StaticResource SecondaryButton}" Content="恢复默认" Margin="8,0,0,0" Click="OnResetHotkey"/>
+                        <Button x:Name="ResetHotkeyButton" Style="{StaticResource SecondaryButton}" Content="恢复默认" Margin="8,0,0,0" Click="OnResetHotkey"/>
                       </StackPanel>
                     </Grid>
                   </Border>

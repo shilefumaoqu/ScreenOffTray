@@ -17,9 +17,9 @@ internal static class SettingsWireTests
             var value=Frames.Read(new Fragmented(bytes));Check(value.RequestId==19 && value.Values.Minutes==3 && value.Values.InterfaceTheme=="black" && value.Paths[0]==@"C:\应用\a.exe","fragmented UTF8 frame roundtrip preserves typed values and appearance");
             using(var stream=new MemoryStream()){
                 Frames.Write(stream,new Packet{Kind="state",State=new ViewState{Version=7,AudioKnown=true,PlaybackLimitReached=true,
-                    Sources=new[]{new PlayingSource{Path=@"C:\应用\player.exe",Name="Player",Protected=true}}}});
+                    Sources=new[]{new PlayingSource{Path=@"C:\应用\player.exe",Name="Player",Whitelisted=true,Protected=true}}}});
                 stream.Position=0;value=Frames.Read(stream);
-                Check(value.State.PlaybackLimitReached && value.State.Sources[0].Protected,"playback protection state survives the framed protocol");
+                Check(value.State.PlaybackLimitReached && value.State.Sources[0].Whitelisted && value.State.Sources[0].Protected,"playback protection state survives the framed protocol");
             }
             Refuse(new byte[]{0,0,0,0},"zero length");Refuse(new byte[]{255,255,255,255},"negative length");Refuse(new byte[]{1,0,64,0},"oversized length");Refuse(new byte[]{3,0,0,0,65},"truncated payload");
             using(var stream=new MemoryStream()){Frames.Write(stream,new Packet{Protocol=2,Kind="hello"});Refuse(stream.ToArray(),"unsupported protocol");}

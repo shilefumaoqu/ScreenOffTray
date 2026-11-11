@@ -115,9 +115,10 @@ namespace ScreenOffTray
                 ProtectionEn=panel.Timing.Blocked || panel.Timing.PlaybackLimitReached?AutoOffStatusText.Format(panel.Timing,_timeoutMinutes,true):"",
                 AudioKnown=panel.Audio!=null && panel.Audio.Known,
                 PlaybackLimitReached=panel.Timing.PlaybackLimitReached,
-                Sources=panel.Audio==null || !panel.Audio.Known || panel.Audio.Sources==null?new PlayingSource[0]:panel.Audio.Sources.Select(s=>new PlayingSource{
-                    Path=s.ExePath,Name=s.DisplayName,
-                    Protected=playbackBlocks && whitelist.Any(path=>String.Equals(path,s.ExePath,StringComparison.OrdinalIgnoreCase))
+                UserPaused=_paused,
+                Sources=panel.Audio==null || !panel.Audio.Known || panel.Audio.Sources==null?new PlayingSource[0]:panel.Audio.Sources.Select(s=>{
+                    bool listed=whitelist.Any(path=>String.Equals(path,s.ExePath,StringComparison.OrdinalIgnoreCase));
+                    return new PlayingSource{Path=s.ExePath,Name=s.DisplayName,Whitelisted=listed,Protected=playbackBlocks && listed};
                 }).ToArray(),
                 Whitelist=whitelist,MigrationChoices=_migrationChoices==null?new int[0]:(int[])_migrationChoices.Clone(),
                 UpdateZh=UpdateText(false),UpdateEn=UpdateText(true),UpdateAvailable=_updateResult!=null && _updateResult.Status==UpdateCheckStatus.Available,

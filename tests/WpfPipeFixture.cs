@@ -31,7 +31,7 @@ internal static class WpfPipeFixture
                 string playingPath=Environment.GetFolderPath(Environment.SpecialFolder.System)+@"\notepad.exe";
                 var state=new ViewState{Version=1,Ready=true,CanClose=true,AudioKnown=true,StatusZh="✓ 显示已就绪",StatusEn="✓ Display ready",
                     Whitelist=Enumerable.Range(0,10).Select(x=>@"C:\Fixture\app"+x+".exe").ToArray(),
-                    Sources=new[]{new PlayingSource{Path=playingPath,Name="Fixture icon reader",Protected=false}},
+                    Sources=new[]{new PlayingSource{Path=playingPath,Name="Fixture icon reader",Whitelisted=false,Protected=false}},
                     Applied=new FormValues{Minutes=3,Hotkey="Ctrl+Alt+F10",Language=args[1]=="en"?"en":"zh-CN",AutomaticUpdates=true,LimitEnabled=true,LimitMinutes=60,InterfaceTheme="warm"}};
                 using(host=new SettingsPipeHost(a=>commands.Add(a),delegate(Packet packet,Action<Packet> result){
                     if(packet.Kind=="save") {
