@@ -12,11 +12,13 @@ A Windows tray utility for OLED users who want the screen off while downloads, c
 
 **0.2.1** removes the reference sample's colored geometry wallpaper and the display-only backdrop, outer margin and shadow from Settings, leaving only the neutral blue-gray rounded frosted-glass window. Opaque top-level misted surfaces also remove transparent-window content ghosting. Setup uses matching light and dark misted backgrounds, glass cards and the same layered-moon mark. `ScreenOffTray.Settings.exe` still owns the window, while the background process owns tray state, playback protection, hotkeys and display off. `v0.2.0`, `v0.1.9` and older installers remain available.
 
-![English Light appearance using isolated demo data](docs/images/settings-en.png)
+![Settings tour: General, playback protection, warm white and black appearances](docs/images/settings-tour-en.gif)
+
+*Animated slideshow made from isolated demonstration data; static screenshots are linked below.*
 
 Right-click opens a small menu with status and quick actions. Settings opens a separate Pane-styled WPF window with General, Playback protection and About pages. Light, Warm white and Black appearances are available; Light is the default and the choice is saved with the other settings. Application icons come from their executable files, while Settings and Setup share the supplied layered-moon mark. Closing Settings ends only that UI process; the tray application keeps running. Ready startup remains silent. The installer continues into the same Settings host: check displays, complete preparation, and confirm readiness. Users can defer action; display off stays disabled until preparation is verified.
 
-[Chinese UI](docs/images/settings-zh.png) · [Warm white](docs/images/settings-warm.png) · [Black](docs/images/settings-black.png)
+[Light](docs/images/settings-en.png) · [Chinese UI](docs/images/settings-zh.png) · [Warm white](docs/images/settings-warm.png) · [Black](docs/images/settings-black.png)
 
 Targets **Windows 10 22H2 / Windows 11 x64 with one physical display** and requires .NET Framework 4.8 already installed. A virtual display driver keeps the desktop running. Its impact on automatic direct-discrete-GPU display switching on hybrid-GPU laptops remains unverified; evaluate compatibility if your workflow requires that feature.
 

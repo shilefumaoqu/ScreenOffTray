@@ -12,11 +12,13 @@
 
 **0.2.1** 修正 Pane 风格设置页误用参考图彩色几何壁纸的问题，并删除窗口外围的演示底图、外边距和投影，只保留中性蓝灰磨砂玻璃窗口本体；顶层不透明雾面材质同时消除了透明窗口内容重影。安装向导同步采用浅/深色雾面背景、玻璃卡片和同款双层月亮图标。设置仍由独立的 `ScreenOffTray.Settings.exe` 承载，后台继续负责托盘、播放保护、快捷键和关屏。`v0.2.0`、`v0.1.9` 及更早安装包继续保留，不会被覆盖。
 
-![中文浅色外观：隔离演示数据](docs/images/settings-zh.png)
+![设置窗口动态展示：通用、播放保护、暖白与黑色外观](docs/images/settings-tour-zh.gif)
+
+*界面轮播由隔离环境中的演示数据生成；下方可查看静态截图。*
 
 右键显示状态与常用操作的小菜单，点击“设置…”打开独立的 Pane 风格 WPF 窗口。界面分为通用、播放保护、关于三页，提供浅色、暖白和黑色三种外观；默认浅色，主题随设置保存。程序图标来自实际可执行文件，设置页和安装向导使用同一套双层月亮标识。窗口可最小化，关闭后设置进程结束，后台继续在托盘运行；只有菜单“退出”结束程序。正常就绪启动保持安静；安装结束点击“完成并配置”，直接进入同一设置宿主：检查显示条件、一键完成配置、确认已就绪。失败时在同一窗口说明处理步骤；可稍后处理，未完成前不会关屏。
 
-[English UI](docs/images/settings-en.png) · [Warm white](docs/images/settings-warm.png) · [Black](docs/images/settings-black.png)
+[浅色](docs/images/settings-zh.png) · [English UI](docs/images/settings-en.png) · [暖白](docs/images/settings-warm.png) · [黑色](docs/images/settings-black.png)
 
 当前面向 **Windows 10 22H2 / Windows 11 x64、一个实体显示器**，需要已安装 .NET Framework 4.8。通过虚拟显示驱动维持桌面运行；虚拟屏对部分混合显卡电脑的独显直连自动切换仍有未验证影响，需要这类功能时请先评估兼容性。
 
