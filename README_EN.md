@@ -1,74 +1,82 @@
-> ScreenOffTray 0.2.1 brings Settings and Setup into one Pane-inspired neutral frosted-glass language with Light, Warm white and Black appearances. Existing driver, display-off, input recovery, playback protection and display preparation behavior is retained.
+![ScreenOffTray: let your screen rest while your work continues](docs/images/guide/hero-en.png)
 
 # ScreenOffTray
 
-[简体中文](README.md)
+[简体中文](README.md) · [Download for Windows](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.1) · [Report an issue](https://github.com/shilefumaoqu/ScreenOffTray/issues)
 
-**Turn off your display while applications keep running.**
+**Turn off the display while your applications keep running.**
 
-A Windows tray utility for OLED users who want the screen off while downloads, calculations and background work continue. Turn it off immediately with a shortcut, or automatically after physical keyboard and mouse inactivity. It does not lock, sleep, hibernate or shut down Windows.
+ScreenOffTray is a Windows tray utility. Turn the screen off with a shortcut or automatically after keyboard and mouse inactivity while downloads, computations and other work continue. It does not lock, sleep, hibernate or shut down Windows.
 
-**[Download the Windows x64 installer · v0.2.1](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.1)**
+Requires Windows 10 22H2 / Windows 11 x64, one physical display and .NET Framework 4.8.
 
-**0.2.1** removes the reference sample's colored geometry wallpaper and the display-only backdrop, outer margin and shadow from Settings, leaving only the neutral blue-gray rounded frosted-glass window. Opaque top-level misted surfaces also remove transparent-window content ghosting. Setup uses matching light and dark misted backgrounds, glass cards and the same layered-moon mark. `ScreenOffTray.Settings.exe` still owns the window, while the background process owns tray state, playback protection, hotkeys and display off. `v0.2.0`, `v0.1.9` and older installers remain available.
+## What it does
 
-![Settings tour: General, playback protection, warm white and black appearances](docs/images/settings-tour-en.gif)
+- **Turn the display off your way:** use a shortcut immediately or set an idle timeout.
+- **Keep listening:** whitelist a playing app to pause automatic display-off while it plays audio. Manual display-off remains available.
+- **Wake without an accidental click:** after the guard period, the first physical key or mouse click wakes the screen instead of reaching the active app.
 
-*Animated slideshow made from isolated demonstration data; static screenshots are linked below.*
+## See how it works
 
-Right-click opens a small menu with status and quick actions. Settings opens a separate Pane-styled WPF window with General, Playback protection and About pages. Light, Warm white and Black appearances are available; Light is the default and the choice is saved with the other settings. Application icons come from their executable files, while Settings and Setup share the supplied layered-moon mark. Closing Settings ends only that UI process; the tray application keeps running. Ready startup remains silent. The installer continues into the same Settings host: check displays, complete preparation, and confirm readiness. Users can defer action; display off stays disabled until preparation is verified.
+> The demonstrations use actual Settings controls on an isolated test desktop, triggered automatically and captured frame by frame. The pointer and click rings are annotations; save and playback results come from a simulated backend. No production settings or physical displays were changed.
 
-[Light](docs/images/settings-en.png) · [Chinese UI](docs/images/settings-zh.png) · [Warm white](docs/images/settings-warm.png) · [Black](docs/images/settings-black.png)
+### 1. Set an idle timeout
 
-Targets **Windows 10 22H2 / Windows 11 x64 with one physical display** and requires .NET Framework 4.8 already installed. A virtual display driver keeps the desktop running. Its impact on automatic direct-discrete-GPU display switching on hybrid-GPU laptops remains unverified; evaluate compatibility if your workflow requires that feature.
+Adjust the minutes under General and select Save to apply ordinary settings. You can also record your own shortcut here. New users start with a 10-minute timeout and `Ctrl+Alt+F10`.
 
-## Get started
+![Adjusting the idle timeout and submitting a save](docs/images/guide/idle-en.gif)
 
-1. Download `ScreenOffTray-0.2.1-Setup-x64.exe` from the Release, run it, and complete the Windows administrator prompt. Setup works offline and does not download the .NET runtime. The wizard keeps native keyboard and DPI behavior while using a neutral misted background, fine highlight edges and glass cards.
-2. On first launch, choose “Prepare and enable display off”. Preparation matches the physical display conditions and restores the layout. The display may flicker; avoid changing Windows display settings at the same time. If safe matching fails, display-off stays paused.
-3. Right-click the tray icon → Settings to change the timeout, shortcut, language and startup preference. Save applies ordinary drafts; Cancel or closing the window discards them. Whitelist edits are saved immediately. Display off is deferred while Settings is open and resumes its existing rules after closure. New users start with **10 minutes** and startup disabled.
-4. Press **Ctrl+Alt+F10**, or choose “Turn off now”. To customize the shortcut, focus its field in Settings, press a combination, release it and save.
+### 2. Protect a playing application
 
-Before upgrading, exit the previous version normally from the tray. Setup does not force-close it, and existing settings are retained. Everyday use does not require administrator privileges. The application and installer currently have no application code signature; the bundled driver retains its upstream signature.
+Playback protection lists detected playing applications. Add one to the whitelist to pause automatic display-off while it plays audio. Adding or removing a whitelist entry is saved immediately, independently of the ordinary Save and Cancel buttons.
 
-## Waking the display
+![Adding a simulated playback application to the whitelist](docs/images/guide/play-en.gif)
 
-- A **3-second guard** follows display-off. Physical key and mouse-button presses during it neither wake the display nor reach applications.
-- After the guard, release any held key or button, then press a physical keyboard key or mouse button.
-- **The first press and release only wake the display.** The next press works normally in the current application.
-- Mouse movement, scrolling and input marked as injected by Windows do not wake it. Unmarked kernel-level virtual HID input is outside the identification guarantee.
+The protection cap defaults to 60 minutes, measured from the last physical input. When it expires, playback no longer blocks display-off, although the normal idle threshold must still be met. Entries match the executable's full path; the app does not inspect webpages or silent video frames.
 
-This is not a privacy lock. Use Windows Lock when you need to restrict other people's access to the computer.
+### 3. Wake the screen
 
-## Automatic display-off rules
+![Illustrated display-off, guard, physical input and wake sequence](docs/images/guide/wake-en.gif)
 
-| Situation | Behavior |
+This is an **illustrated sequence**, not a recording of a physical display. A 3-second guard follows display-off. Afterwards, release held keys or buttons, then press a physical keyboard key or mouse button. The first press and release only wake the display; the next input reaches the application normally.
+
+Mouse movement, scrolling and input marked as injected by Windows do not wake it. Unmarked kernel-level virtual HID is outside the identification guarantee. This utility is not a privacy lock; use Windows Lock to restrict access.
+
+### 4. Choose an appearance
+
+Choose Light, Warm white or Black under About. Simplified Chinese and English are available. Appearance changes are saved with ordinary settings.
+
+![Switching between light, warm white and black appearances](docs/images/guide/theme-en.gif)
+
+## Install and get started
+
+1. Download `ScreenOffTray-0.2.1-Setup-x64.exe` from [v0.2.1 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.1), run it and approve the Windows administrator prompt. Setup works offline and does not download the .NET runtime.
+2. During first-time setup, choose “Prepare and enable display off” in Settings. The display may flicker; avoid changing Windows display settings during preparation. If safe matching fails, display-off stays disabled and a reason is shown.
+3. Open Settings from the tray menu to adjust the timeout, shortcut and language. Save applies ordinary drafts; Cancel or closing the window discards them. Display-off is deferred while Settings is open.
+4. Press `Ctrl+Alt+F10` or choose “Turn off now” in the tray menu. Closing Settings leaves the background app running; use “Exit” in the tray menu to quit it.
+
+Before upgrading, exit the previous version normally from the tray. Setup does not force-close it and keeps existing settings. Everyday use does not require administrator rights. The application and installer are not code-signed; the driver retains its upstream signature.
+
+## Playback protection and limits
+
+| Situation | Automatic display-off |
 | --- | --- |
-| Physical input has been idle for the configured interval | Turn the display off |
-| A whitelisted program is playing audio | Pause automatic off and show the program |
-| Playback protection ends | Start a full timeout again |
-| Physical inactivity reaches the playback cap (60 minutes by default) | Playback no longer blocks off; the normal idle threshold must also be reached |
-| An unlisted program, silent video, or a system display request | Does not block automatic off by itself |
-| Manual shortcut or “Turn off now” | Bypasses playback protection |
+| A whitelisted application is playing audio | Paused |
+| Playback protection ends | The full idle timeout starts again |
+| Audio state cannot be read reliably | Paused with an explanation |
+| An unlisted app, silent video or system display request | Does not block automatic display-off by itself |
+| Manual shortcut or tray command | Bypasses playback protection |
 
-Use the current playing-program list in Settings to add an app. The saved whitelist uses a single-row dropdown. Add/remove is saved immediately; cancelling other settings does not undo it. New installs start with an empty list. Protection matches the full executable path; it does not inspect webpage content or video frames.
+Explicitly paused players are filtered only when their identity is reliably matched and the state is fresh; not every player is guaranteed to be detected. The initial whitelist is empty, and the cap can be disabled. The app does not clear other applications' system requests.
 
-The existing prototype audio detection is retained. A fresh, unambiguously matched player state may suppress explicitly paused sources, addressing the NetEase pause false positive. Unavailable audio state pauses automatic off with a reason. Detection is not guaranteed for every player or silent video. The cap can be disabled and is measured from the last physical input, not the start of playback. The app does not clear other applications' system requests.
+The app uses a virtual display driver to keep the desktop running. Effects on automatic discrete-GPU direct-display switching on some hybrid-GPU machines remain unverified. See [validation and limitations](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/docs/验证与限制.md); an isolated demonstration does not establish real-hardware or long-term stability.
 
-## Settings and updates
+## Updates, development and license
 
-Chinese and English are available. Timeout, shortcut, language, startup and automatic update-check preferences are saved. Normal startup does not repeatedly open preparation; preparation and diagnostics are available in Settings.
+Settings can check for stable updates. Automatic checks are enabled by default and only provide a download link; they never install or quit the app. Older installers remain available in [Releases](https://github.com/shilefumaoqu/ScreenOffTray/releases).
 
-Settings includes the version, “Check for updates” and an automatic-check toggle. The update source is the stable GitHub Releases feed for `shilefumaoqu/ScreenOffTray`. Automatic checks are on by default and only notify with a download link; they never install automatically or exit the app. Existing settings are retained after upgrade, and older releases remain available.
+Built with .NET Framework 4.8 / C# 5, with a WinForms background app and a separate WPF Settings process. See [build and verification](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/docs/构建与验证.md) and [version validation](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/docs/版本验证.md).
 
-## Development and verification
+Project source and original assets use the [MIT License](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/LICENSE). The virtual display driver is [Virtual Display Driver 25.7.23](https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/tag/25.7.23), retaining its original signature and [MIT license](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/Licenses/Virtual-Display-Driver-MIT.txt). VDD Control, DevCon and audio drivers are not bundled.
 
-Built with **.NET Framework 4.8 / C# 5**. The tray and background use WinForms, while Settings runs in a separate WPF process; no additional runtime libraries are required. Run `打包安装版.cmd` in the repository root to build the offline installer. The first build downloads and verifies pinned tools. See [Build and verification](docs/构建与验证.md) for commands and English instructions.
-
-Historical evidence is in [Validation and limitations](docs/验证与限制.md); see [version validation](docs/版本验证.md) for targeted checks and remaining gaps. Isolated tests do not establish hardware compatibility or long-term stability. See [Release notes](RELEASE_NOTES.md).
-
-## Driver and license
-
-Project source and original assets use the [MIT License](LICENSE). The virtual display driver comes from [VirtualDrivers/Virtual-Display-Driver · 25.7.23](https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/tag/25.7.23). The original INF/DLL/CAT, signature and [MIT license](Licenses/Virtual-Display-Driver-MIT.txt) are retained. VDD Control, DevCon and audio drivers are not bundled. [Third-party provenance and hashes](Licenses/第三方材料说明.md).
-
-[Open an issue](https://github.com/shilefumaoqu/ScreenOffTray/issues) with your Windows version, display count and pause reason. Remove personal paths and device information before sharing logs.
+[Open an issue](https://github.com/shilefumaoqu/ScreenOffTray/issues) with your Windows version, number of physical displays and error reason. Remove personal paths and device information before sharing logs.
