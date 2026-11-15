@@ -35,7 +35,7 @@ namespace ScreenOffTray.SettingsUi
         private readonly Dictionary<string,SourceRow> sourceRows=new Dictionary<string,SourceRow>(StringComparer.OrdinalIgnoreCase);
         private readonly ApplicationIcons icons;
         private bool settingValues,closed,migrationNeeded,listBusy,viewBusy,playbackLimitReached,userPaused;
-        private string migrationKey,listKey,sourcesKey,backgroundMode="geometry";
+        private string migrationKey,listKey,sourcesKey,backgroundMode="system";
         private PlayingSource[] currentSources=new PlayingSource[0];
         private string[] appliedWhitelist=new string[0];
 
@@ -100,7 +100,7 @@ namespace ScreenOffTray.SettingsUi
             {
                 string value;
                 if(StaticTranslations.TryGetValue(text.Text,out value))text.Text=value;
-                else if(text.Text=="版本 0.2.2 · Windows x64")text.Text="Version 0.2.2 · Windows x64";
+                else if(text.Text=="版本 0.2.3 · Windows x64")text.Text="Version 0.2.3 · Windows x64";
             }
             var control=root as ContentControl;
             if(control!=null && control.Content is string)
@@ -144,7 +144,7 @@ namespace ScreenOffTray.SettingsUi
             {"3 秒防误触","3-second guard"},{"保护期内的实体输入不会唤醒，也不会传给当前软件","Physical input during the guard neither wakes nor reaches the active app"},
             {"首次输入只负责亮屏","First input only wakes"},{"松开后再次按键或点击，才会正常操作软件","Release, then press or click again to control the app"},
             {"外观","Appearance"},{"窗口外观","Window appearance"},{"三套外观只改变设置窗口材质，选择会随设置保存","The three appearances change only this Settings window and are saved with your settings"},
-            {"浅色","Light"},{"暖白","Warm white"},{"黑色","Black"},
+            {"跟随系统","Use system theme"},{"浅色","Light"},{"深色","Dark"},
             {"数据与帮助","Data and help"},{"设置保存在本机","Settings stay on this PC"},{"安装版由独立后台读写；当前预览不会修改正式配置","The installed app stores settings through its local backend"},
             {"本地","Local"},{"打开使用帮助","Open help"},{"查看显示准备、播放保护与快捷键说明","Read about display preparation, playback protection and hotkeys"},{"打开","Open"},
             {"检查更新","Check for updates"},{"更改将在保存后生效","Changes take effect after saving"},{"白名单增删即时保存","Allowlist changes save immediately"},
@@ -283,10 +283,12 @@ namespace ScreenOffTray.SettingsUi
             PrepareStateText.Foreground=(Brush)FindResource(success?"Success":warning?"Warning":"Text2");
         }
 
-        public void SetUpdate(string value)
+        public void SetUpdate(string value,bool available)
         {
             UpdateStatusText.Text=value??"";
             UpdateStatusText.Visibility=String.IsNullOrEmpty(value)?Visibility.Collapsed:Visibility.Visible;
+            UpdateButton.Content=available?T("下载安装包","Download installer"):T("检查更新","Check for updates");
+            UpdateButton.ToolTip=available?T("打开 GitHub 安装包下载","Open the GitHub installer download"):T("检查更新","Check for updates");
         }
 
         public void SetError(string value)
@@ -304,14 +306,14 @@ namespace ScreenOffTray.SettingsUi
                 ChineseChoice.IsChecked=lang!="en";EnglishChoice.IsChecked=lang=="en";
                 StartupSwitch.IsChecked=start;UpdatesSwitch.IsChecked=automatic;
                 ProtectionLimitSwitch.IsChecked=capped;ProtectionMinutesInput.Text=capMinutes.ToString();ProtectionMinutesInput.IsEnabled=capped;
-                ApplyBackground(String.IsNullOrEmpty(theme)?"geometry":theme);
+                ApplyBackground(String.IsNullOrEmpty(theme)?"system":theme);
             }
             finally{settingValues=false;}
         }
 
         public void SetValues(int minutes,string key,string lang,bool start,bool automatic,bool capped,int capMinutes)
         {
-            SetValues(minutes,key,lang,start,automatic,capped,capMinutes,"geometry");
+            SetValues(minutes,key,lang,start,automatic,capped,capMinutes,"system");
         }
 
         private void ApplyBusy()
@@ -422,34 +424,44 @@ namespace ScreenOffTray.SettingsUi
 
         private void ApplyBackground(string mode)
         {
-            backgroundMode=(mode??"geometry").ToLowerInvariant();
-            if(backgroundMode!="geometry" && backgroundMode!="warm" && backgroundMode!="black")backgroundMode="geometry";
-            bool dark=backgroundMode=="black";
+            backgroundMode=NormalizeTheme(mode);
+            bool dark=backgroundMode=="dark" || (backgroundMode=="system" && IsSystemDark());
             Stage.Background=Brushes.Transparent;
-            GeometryChoice.IsChecked=backgroundMode=="geometry";WarmChoice.IsChecked=backgroundMode=="warm";BlackChoice.IsChecked=backgroundMode=="black";
+            SystemChoice.IsChecked=backgroundMode=="system";LightChoice.IsChecked=backgroundMode=="light";DarkChoice.IsChecked=backgroundMode=="dark";
             if(dark)
             {
                 Resources["Text1"]=MakeBrush("#F2FFFFFF");Resources["Text2"]=MakeBrush("#A6FFFFFF");Resources["Text3"]=MakeBrush("#70FFFFFF");
                 Resources["Stroke"]=MakeBrush("#18FFFFFF");Resources["FillControl"]=MakeBrush("#20FFFFFF");Resources["FillHover"]=MakeBrush("#18FFFFFF");
                 Resources["FillSelected"]=MakeBrush("#20FFFFFF");Resources["WarningSurface"]=MakeBrush("#2AF5A524");Resources["DangerSurface"]=MakeBrush("#28E5484D");Resources["SuccessSurface"]=MakeBrush("#2035B880");
-                Shell.Background=MakeGradient("#FF181A1E","#FF121417");SidebarSurface.Background=MakeBrush("#FF24272C");FooterBar.Background=MakeBrush("#FF14171B");Shell.BorderBrush=MakeBrush("#22FFFFFF");
+                Shell.Background=MakeGradient("#FF1C1C20","#FF161619");SidebarSurface.Background=MakeBrush("#FF202126");FooterBar.Background=MakeBrush("#FF18191D");Shell.BorderBrush=MakeBrush("#22FFFFFF");
             }
             else
             {
                 Resources["Text1"]=MakeBrush("#EB141418");Resources["Text2"]=MakeBrush("#9E141418");Resources["Text3"]=MakeBrush("#6B141418");
-                if(backgroundMode=="warm")
-                {
-                    Resources["Stroke"]=MakeBrush("#1C5B4E40");Resources["FillControl"]=MakeBrush("#FFFDFBF7");Resources["FillHover"]=MakeBrush("#0C5B4E40");
-                    Resources["FillSelected"]=MakeBrush("#FFFFFEFA");Resources["WarningSurface"]=MakeBrush("#FFF8E8");Resources["DangerSurface"]=MakeBrush("#FFF0F0");Resources["SuccessSurface"]=MakeBrush("#EEF9F2");
-                    Shell.Background=MakeGradient("#FFF7F3ED","#FFEEEAE2");SidebarSurface.Background=MakeBrush("#FFF1EDE6");FooterBar.Background=MakeBrush("#FFFAF7F2");Shell.BorderBrush=MakeBrush("#285B4E40");
-                }
-                else
-                {
-                    Resources["Stroke"]=MakeBrush("#14000000");Resources["FillControl"]=MakeBrush("#DFFFFFFF");Resources["FillHover"]=MakeBrush("#0C000000");
-                    Resources["FillSelected"]=MakeBrush("#CFFFFFFF");Resources["WarningSurface"]=MakeBrush("#FFF8E8");Resources["DangerSurface"]=MakeBrush("#FFF0F0");Resources["SuccessSurface"]=MakeBrush("#EEF9F2");
-                    Shell.Background=MakeGradient("#FFF6F7F9","#FFEDF1F5");SidebarSurface.Background=MakeBrush("#FFEDF0F3");FooterBar.Background=MakeBrush("#FFF4F5F7");Shell.BorderBrush=MakeBrush("#24000000");
-                }
+                Resources["Stroke"]=MakeBrush("#14000000");Resources["FillControl"]=MakeBrush("#DFFFFFFF");Resources["FillHover"]=MakeBrush("#0C000000");
+                Resources["FillSelected"]=MakeBrush("#CFFFFFFF");Resources["WarningSurface"]=MakeBrush("#FFF8E8");Resources["DangerSurface"]=MakeBrush("#FFF0F0");Resources["SuccessSurface"]=MakeBrush("#EEF9F2");
+                Shell.Background=MakeGradient("#FFF6F6F8","#FFE7ECF2");SidebarSurface.Background=MakeBrush("#FFEDF0F3");FooterBar.Background=MakeBrush("#FFF4F5F7");Shell.BorderBrush=MakeBrush("#24000000");
             }
+        }
+
+        private static string NormalizeTheme(string value)
+        {
+            string mode=(value??"system").Trim().ToLowerInvariant();
+            if(mode=="dark" || mode=="black")return "dark";
+            if(mode=="light" || mode=="geometry" || mode=="warm")return "light";
+            return "system";
+        }
+
+        private static bool IsSystemDark()
+        {
+            try
+            {
+                object value=Microsoft.Win32.Registry.GetValue(
+                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                    "AppsUseLightTheme",1);
+                return value is int && (int)value==0;
+            }
+            catch { return false; }
         }
 
         private static SolidColorBrush MakeBrush(string value)

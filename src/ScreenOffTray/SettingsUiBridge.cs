@@ -98,7 +98,7 @@ namespace ScreenOffTray
             bool playbackBlocks=panel.Timing.PauseReason==AutoOffPauseReason.Playback;
             string theme;
             try { theme=NormalizeTheme(Settings.Default.InterfaceTheme); }
-            catch { theme="geometry"; }
+            catch { theme="system"; }
             Func<bool,string> heading=en=>_settingsFailure!=null?(en?"Settings need attention":"设置需要处理"):
                 _migrationChoices!=null?(en?"Choose previous settings":"请选择旧设置"):
                 !_displayOffSupported?(en?"Display off unavailable":"关屏暂不可用"):
@@ -129,7 +129,10 @@ namespace ScreenOffTray
         }
         private static string NormalizeTheme(string value)
         {
-            return value=="warm" || value=="black" ? value : "geometry";
+            string mode=(value??"system").Trim().ToLowerInvariant();
+            if(mode=="dark" || mode=="black")return "dark";
+            if(mode=="light" || mode=="geometry" || mode=="warm")return "light";
+            return "system";
         }
         private async void HandleUiCommand(Packet request,Action<Packet> completed)
         {
@@ -159,7 +162,7 @@ namespace ScreenOffTray
                     case "cancelPrepare":_setup.CancelPreparation();break;
                     case "recheck":if(!_setup.Preparing && !_session.IsBusy)_setup.Recheck();else error="Display operation is busy";break;
                     case "refresh":_audioMonitor.RequestRefresh();break;
-                    case "checkUpdate":if(_updateResult!=null && _updateResult.Status==UpdateCheckStatus.Available)OpenUpdateRelease();else CheckForUpdates(false);break;
+                    case "checkUpdate":if(_updateResult!=null && _updateResult.Status==UpdateCheckStatus.Available) {if(!OpenUpdateRelease())error=_text.Pick("无法打开下载页面，请稍后重试。","Could not open the download page. Try again later.");}else CheckForUpdates(false);break;
                     case "displaySettings":System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:display"){UseShellExecute=true});break;
                     default:error="Unsupported settings command";code="unsupported_command";break;
                 }

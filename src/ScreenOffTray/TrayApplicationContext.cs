@@ -374,8 +374,10 @@ namespace ScreenOffTray
         }
         private async Task<string> SaveSettingsTransactionAsync(SettingsValues values)
         {
-            string interfaceTheme=values == null ? "geometry" : (values.InterfaceTheme ?? "geometry").Trim().ToLowerInvariant();
-            if (interfaceTheme != "geometry" && interfaceTheme != "warm" && interfaceTheme != "black") interfaceTheme="geometry";
+            string interfaceTheme=values == null ? "system" : (values.InterfaceTheme ?? "system").Trim().ToLowerInvariant();
+            if(interfaceTheme=="black")interfaceTheme="dark";
+            else if(interfaceTheme=="geometry" || interfaceTheme=="warm")interfaceTheme="light";
+            if (interfaceTheme != "system" && interfaceTheme != "light" && interfaceTheme != "dark") interfaceTheme="system";
             if (values != null) values.InterfaceTheme=interfaceTheme;
             if (values == null || values.Hotkey == null || values.TimeoutMinutes < MinimumTimeoutMinutes || values.TimeoutMinutes > MaximumTimeoutMinutes ||
                 values.PlaybackLimitMinutes < 1 || values.PlaybackLimitMinutes > 1440 ||
@@ -620,12 +622,15 @@ namespace ScreenOffTray
             _trayIcon.ShowBalloonTip(5000, "ScreenOffTray",
                 _text.Pick("发现新版本，可从“设置”查看并下载。", "A new version is available. Open Settings to review and download it."), ToolTipIcon.Info);
         }
-        private void OpenUpdateRelease()
+        private bool OpenUpdateRelease()
         {
-            if (_exiting || _updateResult == null || _updateResult.Status != UpdateCheckStatus.Available || _updateResult.ReleasePage == null) return;
-            try { Process.Start(new ProcessStartInfo(_updateResult.ReleasePage.AbsoluteUri) { UseShellExecute = true }); }
+            if (_exiting || _updateResult == null || _updateResult.Status != UpdateCheckStatus.Available) return false;
+            Uri destination = _updateResult.InstallerDownload ?? _updateResult.ReleasePage;
+            if (destination == null) return false;
+            try { Process.Start(new ProcessStartInfo(destination.AbsoluteUri) { UseShellExecute = true }); return true; }
             catch (Exception) {
                 _uiFailure=_text.Pick("无法打开浏览器，请稍后重试。","Could not open your browser. Try again later.");PublishUiState();
+                return false;
             }
         }
     }

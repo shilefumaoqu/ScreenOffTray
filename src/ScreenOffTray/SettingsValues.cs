@@ -11,6 +11,6 @@
         internal bool AutomaticUpdateChecks=true;
         internal bool PlaybackLimitEnabled=true;
         internal int PlaybackLimitMinutes=60;
-        internal string InterfaceTheme="geometry";
+        internal string InterfaceTheme="system";
     }
 }

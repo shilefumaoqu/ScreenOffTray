@@ -20,14 +20,16 @@ namespace ScreenOffTray
         public UpdateCheckStatus Status { get; private set; }
         public Version LatestVersion { get; private set; }
         public Uri ReleasePage { get; private set; }
+        public Uri InstallerDownload { get; private set; }
         public string Error { get; private set; }
 
-        internal UpdateCheckResult(UpdateCheckStatus status, Version version, Uri page, string error)
+        internal UpdateCheckResult(UpdateCheckStatus status, Version version, Uri page, string error, Uri installerDownload = null)
         {
             Status = status;
             LatestVersion = version;
             ReleasePage = page;
             Error = error;
+            InstallerDownload = installerDownload;
         }
     }
 
@@ -223,8 +225,35 @@ namespace ScreenOffTray
                 !Uri.TryCreate(page, UriKind.Absolute, out releasePage))
                 return Result(UpdateCheckStatus.Failed, "Unexpected GitHub release page.");
 
+            Uri installerDownload = FindInstallerDownload(release, tag, latest);
             return new UpdateCheckResult(Normalize(latest).CompareTo(Normalize(currentVersion)) > 0
-                ? UpdateCheckStatus.Available : UpdateCheckStatus.UpToDate, latest, releasePage, null);
+                ? UpdateCheckStatus.Available : UpdateCheckStatus.UpToDate, latest, releasePage, null, installerDownload);
+        }
+
+        private Uri FindInstallerDownload(Dictionary<string,object> release,string tag,Version version)
+        {
+            object value;
+            if (!release.TryGetValue("assets", out value)) return null;
+            var assets = value as object[];
+            if (assets == null) return null;
+            string expectedName = "ScreenOffTray-" + version + "-Setup-x64.exe";
+            string prefix = "https://github.com/" + repository + "/releases/download/";
+            string exactSuffix = tag + "/" + expectedName;
+            foreach (object item in assets)
+            {
+                var asset = item as Dictionary<string,object>;
+                object nameValue, urlValue;
+                if (asset == null || !asset.TryGetValue("name",out nameValue) ||
+                    !asset.TryGetValue("browser_download_url",out urlValue) ||
+                    !(nameValue is string) || !(urlValue is string) ||
+                    !String.Equals((string)nameValue,expectedName,StringComparison.Ordinal)) continue;
+                string url = (string)urlValue;
+                Uri result;
+                if (url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                    String.Equals(url.Substring(prefix.Length),exactSuffix,StringComparison.Ordinal) &&
+                    Uri.TryCreate(url,UriKind.Absolute,out result)) return result;
+            }
+            return null;
         }
 
         private static Version Normalize(Version version)
