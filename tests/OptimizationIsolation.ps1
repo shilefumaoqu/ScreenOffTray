@@ -37,9 +37,9 @@ function Deny-Body([string]$text,[string]$signature){
  if($level -ne 0){throw 'Guard lexical scan failed'}
  return $text.Substring(0,$begin)+'{ throw new InvalidOperationException("Blocked in isolated memory diagnostics"); }'+$text.Substring($i+1)
 }
-[xml]$project=[IO.File]::ReadAllText((Join-Path $root 'ScreenOffTray.csproj'))
+[xml]$project=[IO.File]::ReadAllText((Join-Path $root 'src/ScreenOffTray/ScreenOffTray.csproj'))
 $sources=foreach($node in $project.SelectNodes("//*[local-name()='Compile']")){
- $relative=$node.Include;$original=Join-Path $root $relative
+ $relative=$node.Include;$original=Join-Path (Join-Path $root 'src/ScreenOffTray') $relative
  $text=[IO.File]::ReadAllText($original);$before=$text
  if($relative -eq 'Program.cs'){$text=Deny-Body $text 'private static void Main(string[] args)'}
  if($relative -eq 'TrayApplicationContext.cs'){$text=Deny-Body $text 'internal TrayApplicationContext(bool initialSetupRequested = false,Action<bool,bool> startupConfirmation=null)'}
@@ -59,7 +59,7 @@ $sources=foreach($node in $project.SelectNodes("//*[local-name()='Compile']")){
    $text=$text.Remove($match.Index,$match.Length).Insert($match.Index,$replacement)
   }
  }
- if($relative -eq 'Oled\DisplayBackend.cs'){
+ if($relative -eq '..\Shared\DisplayBackend.cs'){
   foreach($signature in @('public void TurnOff()','public void Restore()','public static void Recover(string path)','public void SaveRecovery(string path)')){$text=Deny-Body $text $signature}
   $text=Replace-Exact $text 'private static class Native' 'internal static class Native'
   $needle='internal static extern int SetDisplayConfig(uint pathCount, [In] PathInfo[] paths,'
@@ -83,7 +83,7 @@ $sources=foreach($node in $project.SelectNodes("//*[local-name()='Compile']")){
   $text=Deny-Body $text 'public string Commit(byte[] original, byte[] desired, VirtualModeRequirement requirement)'
   $text=Deny-Body $text 'public void Restart(VirtualModeRequirement requirement)'
  }
- $destination=Join-Path $copies $relative;[void][IO.Directory]::CreateDirectory((Split-Path -Parent $destination))
+ $destination=Join-Path $copies ($relative.Replace('..\Shared\','Shared\'));[void][IO.Directory]::CreateDirectory((Split-Path -Parent $destination))
  [IO.File]::WriteAllText($destination,$text,$utf8)
  $manifest.Add([pscustomobject]@{Path=$relative;SourceHash=(Get-FileHash -LiteralPath $original).Hash;DiagnosticHash=(Get-FileHash -LiteralPath $destination).Hash;Modified=($before -cne $text)})
  $destination
@@ -92,10 +92,10 @@ $manifest|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $OutputDir
 $sources+=Join-Path $PSScriptRoot 'OptimizationIsolationProbe.cs'
 $sources+=Join-Path $PSScriptRoot 'OwnedProcessIdentity.cs'
 $references=@($project.SelectNodes("//*[local-name()='Reference']")|ForEach-Object{'/r:'+$_.Include+'.dll'})
-$resources=@($project.SelectNodes("//*[local-name()='EmbeddedResource']")|ForEach-Object{'/resource:'+(Join-Path $root $_.Include)+','+$_.LogicalName})
+$resources=@($project.SelectNodes("//*[local-name()='EmbeddedResource']")|ForEach-Object{'/resource:'+(Join-Path (Join-Path $root 'src/ScreenOffTray') $_.Include)+','+$_.LogicalName})
 $binary=Join-Path $OutputDirectory 'ScreenOffMemoryIsolation.exe'
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$log=& $compiler /nologo /utf8output /target:exe /platform:x64 /optimize+ /langversion:5 /codepage:65001 /main:ScreenOffTray.Tests.OptimizationIsolationProbe ('/out:'+$binary) $references ('/win32manifest:'+(Join-Path $root 'app.manifest')) $resources $sources 2>&1
+$log=& $compiler /nologo /utf8output /target:exe /platform:x64 /optimize+ /langversion:5 /codepage:65001 /main:ScreenOffTray.Tests.OptimizationIsolationProbe ('/out:'+$binary) $references ('/win32manifest:'+(Join-Path $root 'src/ScreenOffTray/app.manifest')) $resources $sources 2>&1
 [IO.File]::WriteAllLines((Join-Path $OutputDirectory 'compile.txt'),[string[]]@($log|ForEach-Object{$_.ToString()}),$utf8)
 if($LASTEXITCODE){throw "Diagnostic build failed: $log"}
 if(!$CompileOnly){

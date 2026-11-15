@@ -3,8 +3,8 @@ $ErrorActionPreference='Stop'
 $projectRoot=Split-Path -Parent $PSScriptRoot
 if(!$OutputDirectory) { $OutputDirectory=Join-Path $projectRoot 'checks/setup-guidance-20261107/policy' }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
-[xml]$project=Get-Content -LiteralPath (Join-Path $projectRoot 'ScreenOffTray.csproj') -Raw
-$sources=@($project.SelectNodes("//*[local-name()='Compile']") | ForEach-Object {Join-Path $projectRoot $_.Include}) + @(Join-Path $PSScriptRoot 'SetupGuidanceTests.cs')
+[xml]$project=Get-Content -LiteralPath (Join-Path $projectRoot 'src/ScreenOffTray/ScreenOffTray.csproj') -Raw
+$sources=@($project.SelectNodes("//*[local-name()='Compile']") | ForEach-Object {Join-Path (Join-Path $projectRoot 'src/ScreenOffTray') $_.Include}) + @(Join-Path $PSScriptRoot 'SetupGuidanceTests.cs')
 $references=@($project.SelectNodes("//*[local-name()='Reference']") | ForEach-Object {'/r:'+$_.Include+'.dll'})
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 $binary=Join-Path $OutputDirectory 'SetupGuidanceTests.exe'

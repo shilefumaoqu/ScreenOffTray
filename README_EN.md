@@ -77,6 +77,8 @@ Settings can check for stable updates. Automatic checks are enabled by default a
 
 Built with .NET Framework 4.8 / C# 5, with a WinForms background app and a separate WPF Settings process. See [build and verification](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/docs/构建与验证.md) and [version validation](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/docs/版本验证.md).
 
-Project source and original assets use the [MIT License](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/LICENSE). The virtual display driver is [Virtual Display Driver 25.7.23](https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/tag/25.7.23), retaining its original signature and [MIT license](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/Licenses/Virtual-Display-Driver-MIT.txt). VDD Control, DevCon and audio drivers are not bundled.
+Project source and original assets use the [MIT License](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/LICENSE). The virtual display driver is [Virtual Display Driver 25.7.23](https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/tag/25.7.23), retaining its original signature and [MIT license](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/vendor/Licenses/Virtual-Display-Driver-MIT.txt). VDD Control, DevCon and audio drivers are not bundled.
 
 [Open an issue](https://github.com/shilefumaoqu/ScreenOffTray/issues) with your Windows version, number of physical displays and error reason. Remove personal paths and device information before sharing logs.
+
+Source is organized under `src/` by background app, Settings UI and setup helper, with separate resources, vendor inputs, installer and tests. See the [repository layout](docs/目录结构.md).

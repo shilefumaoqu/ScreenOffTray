@@ -1,4 +1,4 @@
-﻿param([string]$ToolsRoot = (Join-Path $env:LOCALAPPDATA 'ScreenOffTray-Build\Tools'), [string]$RollbackPayload = '')
+﻿param([string]$ToolsRoot = (Join-Path $env:LOCALAPPDATA 'ScreenOffTray-Build\Tools'), [string]$RollbackPayload = '', [string]$OutputDirectory = '')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2
 $productRoot = Split-Path -Parent $PSScriptRoot
@@ -33,7 +33,7 @@ $stage = Join-Path $stageParent ('build-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
 $source = Join-Path $stage 'source'
 $payload = Join-Path $stage 'payload'
 $checks = Join-Path $stage 'checks'
-$output = Join-Path $productRoot '安装包'
+$output = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $productRoot '安装包' }
 foreach ($directory in @($source,$payload,$checks,$output)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
 function Copy-SourceFile([string]$Relative) {
     $from = [IO.Path]::GetFullPath((Join-Path $productRoot $Relative))
@@ -43,35 +43,27 @@ function Copy-SourceFile([string]$Relative) {
     Copy-Item -LiteralPath $from -Destination $to
 }
 
-[xml]$project = Get-Content -LiteralPath (Join-Path $productRoot 'ScreenOffTray.csproj') -Raw
-foreach ($item in @($project.SelectNodes("//*[local-name()='Compile']"))) { Copy-SourceFile $item.Include }
-foreach ($item in @($project.SelectNodes("//*[local-name()='EmbeddedResource']"))) { Copy-SourceFile $item.Include }
-foreach ($file in @('ScreenOffTray.csproj','App.config','app.manifest','图标\ScreenOffTray.ico')) { Copy-SourceFile $file }
-# The separate UI has the same explicit staging boundary; no bin/obj or diagnostics.
-[xml]$uiProject=Get-Content -LiteralPath (Join-Path $productRoot 'WpfSettings\ScreenOffTray.Settings.csproj') -Raw
-Copy-SourceFile 'WpfSettings\ScreenOffTray.Settings.csproj'
-foreach($item in @($uiProject.SelectNodes("//*[local-name()='Compile' or local-name()='EmbeddedResource' or local-name()='Page' or local-name()='Resource' or local-name()='None']"))){Copy-SourceFile ('WpfSettings\'+$item.Include)}
-Copy-SourceFile 'WpfSettings\app.manifest'
-# The helper project has an explicit Compile list; no test/old EXE folders enter staging.
-$helperProjectPath = Join-Path $productRoot 'Installer\DriverSetup.csproj'
-if (!(Test-Path -LiteralPath $helperProjectPath)) { throw 'Missing Installer\DriverSetup.csproj' }
-[xml]$helperProject = Get-Content -LiteralPath $helperProjectPath -Raw
-Copy-SourceFile 'Installer\DriverSetup.csproj'
-foreach ($item in @($helperProject.SelectNodes("//*[local-name()='Compile']"))) {
-    Copy-SourceFile ('Installer\' + $item.Include)
-}
-foreach ($item in @($helperProject.SelectNodes("//*[local-name()='None']") | Where-Object { $_.Include -match '\.manifest$' })) {
-    Copy-SourceFile ('Installer\' + $item.Include)
+$targets = @('src\ScreenOffTray\ScreenOffTray.csproj','src\ScreenOffTray.Settings\ScreenOffTray.Settings.csproj','src\ScreenOffTray.DriverSetup\DriverSetup.csproj')
+foreach ($target in $targets) {
+    Copy-SourceFile $target
+    $projectDirectory = Split-Path -Parent $target
+    [xml]$project = Get-Content -LiteralPath (Join-Path $productRoot $target) -Raw
+    foreach ($item in @($project.SelectNodes("//*[local-name()='Compile' or local-name()='EmbeddedResource' or local-name()='Page' or local-name()='Resource' or local-name()='None']"))) {
+        Copy-SourceFile (Join-Path $projectDirectory $item.Include)
+    }
+    foreach ($item in @($project.SelectNodes("//*[local-name()='ApplicationIcon' or local-name()='ApplicationManifest']"))) {
+        Copy-SourceFile (Join-Path $projectDirectory $item.InnerText)
+    }
 }
 $msbuild = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe'
-foreach ($target in @('ScreenOffTray.csproj','WpfSettings\ScreenOffTray.Settings.csproj','Installer\DriverSetup.csproj')) {
+foreach ($target in $targets) {
     & $msbuild (Join-Path $source $target) /t:Rebuild /tv:4.0 /p:Configuration=Release /p:Platform=AnyCPU /p:DebugSymbols=false /p:DebugType=none ("/p:TargetFrameworkRootPath=" + (Join-Path $referenceRoot 'build\')) /nologo /v:minimal 2>&1 | Tee-Object -FilePath (Join-Path $checks ((Split-Path -Leaf $target) + '.log'))
     if ($LASTEXITCODE -ne 0) { throw "Build failed: $target" }
 }
-Copy-Item -LiteralPath (Join-Path $source 'bin\Release\ScreenOffTray.exe') -Destination $payload
-Copy-Item -LiteralPath (Join-Path $source 'bin\Release\ScreenOffTray.exe.config') -Destination $payload
-Copy-Item -LiteralPath (Join-Path $source 'Installer\bin\Release\ScreenOffTray.DriverSetup.exe') -Destination $payload
-foreach($name in @('ScreenOffTray.Settings.exe','ScreenOffTray.Settings.exe.config')){Copy-Item -LiteralPath (Join-Path $source ('WpfSettings\bin\Release\'+$name)) -Destination $payload}
+Copy-Item -LiteralPath (Join-Path $source 'src\ScreenOffTray\bin\Release\ScreenOffTray.exe') -Destination $payload
+Copy-Item -LiteralPath (Join-Path $source 'src\ScreenOffTray\bin\Release\ScreenOffTray.exe.config') -Destination $payload
+Copy-Item -LiteralPath (Join-Path $source 'src\ScreenOffTray.DriverSetup\bin\Release\ScreenOffTray.DriverSetup.exe') -Destination $payload
+foreach($name in @('ScreenOffTray.Settings.exe','ScreenOffTray.Settings.exe.config')){Copy-Item -LiteralPath (Join-Path $source ('src\ScreenOffTray.Settings\bin\Release\'+$name)) -Destination $payload}
 
 foreach ($subdir in @('Driver','Licenses','配置模板')) {
     New-Item -ItemType Directory -Path (Join-Path $payload $subdir) -Force | Out-Null
@@ -82,14 +74,14 @@ foreach ($name in @('MttVDD.inf','MttVDD.dll','mttvdd.cat')) {
         'MttVDD.dll'='C9CA837F57A98FBD43BC416A7F535A95843626E7759EAF85CF0CD7CE334DBB05'
         'mttvdd.cat'='08A0093FC9B2E32B287A6F8A77CA4DE0A31830D29FC33D2B13A918DC859468F6'
     }
-    if ((Get-FileHash -LiteralPath (Join-Path $productRoot ('Driver\' + $name))).Hash -ne $driverPins[$name]) { throw "Pinned driver differs: $name" }
-    Copy-Item -LiteralPath (Join-Path $productRoot ('Driver\' + $name)) -Destination (Join-Path $payload 'Driver')
+    if ((Get-FileHash -LiteralPath (Join-Path $productRoot ('vendor\VirtualDisplayDriver\' + $name))).Hash -ne $driverPins[$name]) { throw "Pinned driver differs: $name" }
+    Copy-Item -LiteralPath (Join-Path $productRoot ('vendor\VirtualDisplayDriver\' + $name)) -Destination (Join-Path $payload 'Driver')
 }
-foreach ($file in @(Get-ChildItem -LiteralPath (Join-Path $productRoot 'Licenses') -File | Where-Object { $_.Extension -in @('.txt','.md') })) {
+foreach ($file in @(Get-ChildItem -LiteralPath (Join-Path $productRoot 'vendor\Licenses') -File | Where-Object { $_.Extension -in @('.txt','.md') })) {
     Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $payload 'Licenses')
 }
-Copy-Item -LiteralPath (Join-Path $productRoot '配置模板\默认设置说明.json') -Destination (Join-Path $payload '配置模板')
-Copy-Item -LiteralPath (Join-Path $productRoot '帮助.html') -Destination $payload
+Copy-Item -LiteralPath (Join-Path $productRoot 'resources\配置模板\默认设置说明.json') -Destination (Join-Path $payload '配置模板')
+Copy-Item -LiteralPath (Join-Path $productRoot 'resources\帮助.html') -Destination $payload
 Copy-Item -LiteralPath (Join-Path $innoPackage 'tools\license.txt') -Destination (Join-Path $payload 'Licenses\Inno-Setup-License.txt')
 
 $manifest = @(Get-ChildItem -LiteralPath $payload -Recurse -File | ForEach-Object {
