@@ -3,6 +3,7 @@
 在仓库根目录运行。脚本输出写入被忽略的 `checks/`，不会随安装包发布。
 
 - `python tests/RepositoryLayoutTests.py`：检查三个工程的声明文件、路径边界和共享源码归属，不启动程序。
+- `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File tests/BuildEncodingTests.ps1`：在默认打包入口使用的 Windows PowerShell 5.1 下，检查实际工程读取语句的 UTF-8 解码及图标路径；不下载、构建或安装。
 - `tests/SettingsPipeTests.ps1`：隔离命名管道契约。
 - `tests/OptimizationChainTests.ps1`（可加 `-View`）：请求协调、设置事务与状态快照，使用假平台。
 - `tests/StartupTests.ps1`：初始化确认协议，使用假启动器。

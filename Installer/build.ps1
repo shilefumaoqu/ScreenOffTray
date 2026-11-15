@@ -47,7 +47,7 @@ $targets = @('src\ScreenOffTray\ScreenOffTray.csproj','src\ScreenOffTray.Setting
 foreach ($target in $targets) {
     Copy-SourceFile $target
     $projectDirectory = Split-Path -Parent $target
-    [xml]$project = Get-Content -LiteralPath (Join-Path $productRoot $target) -Raw
+    [xml]$project = Get-Content -LiteralPath (Join-Path $productRoot $target) -Raw -Encoding UTF8
     foreach ($item in @($project.SelectNodes("//*[local-name()='Compile' or local-name()='EmbeddedResource' or local-name()='Page' or local-name()='Resource' or local-name()='None']"))) {
         Copy-SourceFile (Join-Path $projectDirectory $item.Include)
     }
