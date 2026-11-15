@@ -2,11 +2,11 @@
 $root=Split-Path -Parent $PSScriptRoot
 $out=Join-Path $root ('checks/optimization-01911/ui-lifetime-final-'+(Get-Date -Format yyyyMMdd-HHmmss));[void][IO.Directory]::CreateDirectory($out)
 $binary=Join-Path $out 'WpfStartupLifetimeFixture.exe'
-& "$env:WINDIR/Microsoft.NET/Framework64/v4.0.30319/csc.exe" /nologo /utf8output /target:exe /platform:x64 /langversion:5 ('/out:'+$binary) /r:System.dll /r:System.Core.dll /r:System.Web.Extensions.dll (Join-Path $root 'SettingsWire.cs') (Join-Path $root 'SettingsPipeHost.cs') (Join-Path $PSScriptRoot 'WpfStartupLifetimeFixture.cs')
+& "$env:WINDIR/Microsoft.NET/Framework64/v4.0.30319/csc.exe" /nologo /utf8output /target:exe /platform:x64 /langversion:5 ('/out:'+$binary) /r:System.dll /r:System.Core.dll /r:System.Web.Extensions.dll (Join-Path $root 'src/Shared/SettingsWire.cs') (Join-Path $root 'src/ScreenOffTray/SettingsPipeHost.cs') (Join-Path $PSScriptRoot 'WpfStartupLifetimeFixture.cs')
 if($LASTEXITCODE){throw 'Fixture compile failed'}
 $definition=[regex]::Match((Get-Content (Join-Path $PSScriptRoot 'MemoryIsolationRun.ps1') -Raw),"(?s)Add-Type -TypeDefinition @'\r?\n(.*?)\r?\n'@").Groups[1].Value
 Add-Type -TypeDefinition $definition
-$env:SCREENOFF_LIFETIME_TEST_UI=Join-Path $root 'WpfSettings/bin/Release/ScreenOffTray.Settings.exe'
+$env:SCREENOFF_LIFETIME_TEST_UI=Join-Path $root 'src/ScreenOffTray.Settings/bin/Release/ScreenOffTray.Settings.exe'
 $results=[Collections.Generic.List[string]]::new()
 foreach($mode in @('invalid','before-connect','error-dialog','connected')){
  $directory=Join-Path $out $mode;[void][IO.Directory]::CreateDirectory($directory);$owner=[MemoryPrivateDesktop]::new();$parent=$null;$child=$null

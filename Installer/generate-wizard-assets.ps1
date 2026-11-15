@@ -152,7 +152,7 @@ function New-Small([string]$path, [string]$iconPath) {
     }
 }
 
-$iconPath = Join-Path $PSScriptRoot '..\WpfSettings\Assets\app-icon.png'
+$iconPath = Join-Path $PSScriptRoot '..\src\ScreenOffTray.Settings\Assets\app-icon.png'
 if (!(Test-Path -LiteralPath $iconPath)) { throw 'Missing application icon source.' }
 New-Background (Join-Path $OutputDirectory 'wizard-back-light.png') $false
 New-Background (Join-Path $OutputDirectory 'wizard-back-dark.png') $true

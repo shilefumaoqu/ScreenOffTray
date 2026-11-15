@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -8,7 +8,7 @@
     <RootNamespace>ScreenOffTray</RootNamespace>
     <AssemblyName>ScreenOffTray</AssemblyName>
     <StartupObject>ScreenOffTray.Program</StartupObject>
-    <ApplicationIcon>图标\ScreenOffTray.ico</ApplicationIcon>
+    <ApplicationIcon>..\..\resources\图标\ScreenOffTray.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -49,8 +49,8 @@
     <Compile Include="SettingsUiBridge.cs" />
     <Compile Include="SettingsValues.cs" />
     <Compile Include="SettingsPipeHost.cs" />
-    <Compile Include="SettingsWire.cs" />
-    <Compile Include="HotkeyBinding.cs" />
+    <Compile Include="..\Shared\SettingsWire.cs" />
+    <Compile Include="..\Shared\HotkeyBinding.cs" />
     <Compile Include="HotkeyRegistration.cs" />
     <Compile Include="NativeMethods.cs" />
     <Compile Include="AutoOffTiming.cs" />
@@ -62,12 +62,12 @@
     <Compile Include="Playback\PlaybackSettingsCodec.cs" />
     <Compile Include="Playback\PlaybackSettingsPersistence.cs" />
     <Compile Include="Playback\AudioMonitor.cs" />
-    <Compile Include="Playback\AudioSourceNames.cs" />
+    <Compile Include="..\Shared\AudioSourceNames.cs" />
     <Compile Include="Playback\MediaPauseFilter.cs" />
     <Compile Include="Playback\MediaSourceResolver.cs" />
     <Compile Include="Playback\WinRtMediaStateReader.cs" />
     <Compile Include="Properties\Settings.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="..\Shared\AssemblyInfo.cs" />
     <Compile Include="InstallationDiagnostics.cs" />
     <Compile Include="SettingsMigration.cs" />
     <Compile Include="DisplaySetup.cs" />
@@ -77,8 +77,8 @@
     <Compile Include="VirtualModeNative.cs" />
     <Compile Include="SetupPromptPolicy.cs" />
     <Compile Include="UpdateChecker.cs" />
-    <Compile Include="Ui\TrayMenu.cs" />
-    <Compile Include="Oled\DisplayBackend.cs" />
+    <Compile Include="TrayMenu.cs" />
+    <Compile Include="..\Shared\DisplayBackend.cs" />
     <Compile Include="Oled\InputGate.cs" />
     <Compile Include="Oled\TransitionDeadline.cs" />
     <Compile Include="Oled\Guardian.cs" />
@@ -92,7 +92,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Properties\Settings.settings" />
-    <None Include="README.md" />
+    <None Include="..\..\README.md" />
     <None Include="App.config" />
     <None Include="app.manifest" />
   </ItemGroup>

@@ -5,9 +5,10 @@ $root=Split-Path -Parent $PSScriptRoot
 $source=if($Baseline){Join-Path $root 'checks/optimization-01911/baseline'}else{$root}
 $output=Join-Path $root $(if($View){'checks/optimization-01911/runtime-view'}else{'checks/optimization-01911/chain-'+$(if($Baseline){'baseline'}else{'candidate'})})
 New-Item -ItemType Directory -Path $output -Force|Out-Null
-[xml]$project=Get-Content -LiteralPath (Join-Path $source 'ScreenOffTray.csproj') -Raw
-$files=@($project.SelectNodes("//*[local-name()='Compile']")|ForEach-Object{Join-Path $source $_.Include})
-if($Baseline){$files+=Join-Path $root 'RuntimeCoordination.cs'}
+$projectDirectory=if($Baseline){$source}else{Join-Path $source 'src/ScreenOffTray'}
+[xml]$project=Get-Content -LiteralPath (Join-Path $projectDirectory 'ScreenOffTray.csproj') -Raw
+$files=@($project.SelectNodes("//*[local-name()='Compile']")|ForEach-Object{Join-Path $projectDirectory $_.Include})
+if($Baseline){$files+=Join-Path $root 'src/ScreenOffTray/RuntimeCoordination.cs'}
 $files+=Join-Path $PSScriptRoot $(if($View){'RuntimeViewTests.cs'}else{'OptimizationChainTests.cs'})
 $refs=@($project.SelectNodes("//*[local-name()='Reference']")|ForEach-Object{'/r:'+$_.Include+'.dll'})
 $binary=Join-Path $output 'OptimizationChainTests.exe'

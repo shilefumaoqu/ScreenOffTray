@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
@@ -11,7 +11,7 @@
     <Prefer32Bit>false</Prefer32Bit>
     <LangVersion>5</LangVersion>
     <CodePage>65001</CodePage>
-    <ApplicationManifest>DriverSetup\app.manifest</ApplicationManifest>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <Optimize>true</Optimize>
     <OutputPath>bin\$(Configuration)\</OutputPath>
     <BaseIntermediateOutputPath>检查\obj\</BaseIntermediateOutputPath>
@@ -23,14 +23,14 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml" />
-    <Compile Include="DriverSetup\Native.cs" />
-    <Compile Include="DriverSetup\State.cs" />
-    <Compile Include="DriverSetup\Topology.cs" />
-    <Compile Include="DriverSetup\Program.cs" />
-    <Compile Include="..\Properties\AssemblyInfo.cs"><Link>AssemblyInfo.cs</Link></Compile>
-    <Compile Include="DriverSetup\SelfTest.cs" />
-    <Compile Include="..\Oled\DisplayBackend.cs"><Link>DisplayBackend.cs</Link></Compile>
-    <None Include="DriverSetup\app.manifest" />
+    <Compile Include="Native.cs" />
+    <Compile Include="State.cs" />
+    <Compile Include="Topology.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="..\Shared\AssemblyInfo.cs"><Link>AssemblyInfo.cs</Link></Compile>
+    <Compile Include="SelfTest.cs" />
+    <Compile Include="..\Shared\DisplayBackend.cs"><Link>DisplayBackend.cs</Link></Compile>
+    <None Include="app.manifest" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -77,6 +77,8 @@ ScreenOffTray 是一款 Windows 托盘工具：离开时按快捷键关屏，或
 
 项目使用 .NET Framework 4.8 / C# 5，后台采用 WinForms，设置窗口为独立 WPF 进程。构建方法见 [构建与验证](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/docs/构建与验证.md)，本版检查见 [版本验证](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/docs/版本验证.md)。
 
-本项目源码及自有资源采用 [MIT 许可](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/LICENSE)。虚拟显示驱动来自 [Virtual Display Driver 25.7.23](https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/tag/25.7.23)，保留原始签名及其 [MIT 许可](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/Licenses/Virtual-Display-Driver-MIT.txt)。安装包不包含 VDD Control、DevCon 或音频驱动。
+本项目源码及自有资源采用 [MIT 许可](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/LICENSE)。虚拟显示驱动来自 [Virtual Display Driver 25.7.23](https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/tag/25.7.23)，保留原始签名及其 [MIT 许可](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/vendor/Licenses/Virtual-Display-Driver-MIT.txt)。安装包不包含 VDD Control、DevCon 或音频驱动。
 
 遇到问题可[提交 Issue](https://github.com/shilefumaoqu/ScreenOffTray/issues)。请附上系统版本、实体显示器数量和错误原因；分享日志前遮去个人路径及设备信息。
+
+源码按后台、设置界面、安装助手归入 `src/`；资源、第三方驱动、安装工具与测试独立存放。参见[目录结构](docs/目录结构.md)。
