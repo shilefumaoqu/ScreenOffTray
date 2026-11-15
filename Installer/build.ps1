@@ -8,7 +8,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 function Get-PinnedZip([string]$Name, [string]$Url, [string]$Hash, [string]$Folder) {
     New-Item -ItemType Directory -Path $ToolsRoot -Force | Out-Null
     $archive = Join-Path $ToolsRoot $Name
-    if (!(Test-Path -LiteralPath $archive)) { Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $archive }
+    if (!(Test-Path -LiteralPath $archive)) { Invoke-WebRequest -UseBasicParsing -Headers @{Accept='application/octet-stream'} -Uri $Url -OutFile $archive }
     if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $Hash) { throw "Build dependency checksum differs: $Name" }
     $destination = Join-Path $ToolsRoot $Folder
     if (!(Test-Path -LiteralPath $destination)) { [IO.Compression.ZipFile]::ExtractToDirectory($archive, $destination) }
@@ -17,7 +17,7 @@ function Get-PinnedZip([string]$Name, [string]$Url, [string]$Hash, [string]$Fold
 
 $referenceRoot = Get-PinnedZip 'microsoft.netframework.referenceassemblies.net48.1.0.3.nupkg' 'https://api.nuget.org/v3-flatcontainer/microsoft.netframework.referenceassemblies.net48/1.0.3/microsoft.netframework.referenceassemblies.net48.1.0.3.nupkg' '8A7E348538E7EB91351696911689F49E3D4F63F8BAB517432BBE159B8B1104A2' 'net48-1.0.3'
 $innoPackage = Get-PinnedZip 'tools.innosetup.7.1.0.nupkg' 'https://api.nuget.org/v3-flatcontainer/tools.innosetup/7.1.0/tools.innosetup.7.1.0.nupkg' 'AAD15C662593C6F5656457A5C001F4591BABD72820CACF63F9706D4AF5D93B75' 'inno-package-7.1.0'
-$unpackerRoot = Get-PinnedZip 'innounp-2.71.2.zip' 'https://github.com/jrathlev/InnoUnpacker-Windows-GUI/releases/download/ui_2_2_13/innounp-2.zip' '10FCE27B6344B7674D5625CC34AFCA1C88C12183D957C6D93E401097FA2556CD' 'innounp-2.71.2'
+$unpackerRoot = Get-PinnedZip 'innounp-2.71.3-695694723.zip' 'https://api.github.com/repos/jrathlev/InnoUnpacker-Windows-GUI/releases/assets/695694723' 'F8E45C9676BEBC7D7570108AB572673B541FCF7A7D3D24A04319AC6B5315B4E8' 'innounp-2.71.3-695694723'
 $iscc = Join-Path $innoPackage 'tools\ISCC.exe'
 foreach ($name in @('ISCC.exe','ISCmplr.dll','ISPP.dll')) {
     $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $innoPackage ('tools\' + $name))
