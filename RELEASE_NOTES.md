@@ -1,3 +1,11 @@
+# ScreenOffTray 0.2.2
+
+本版修复从源码重新打包时的兼容问题：Windows PowerShell 5.1 现在显式按 UTF-8 读取工程文件，避免中文资源路径被系统 ANSI 编码误读；解包验证工具固定到已核验的 innounp 2.71.3 GitHub 附件和 SHA256，解决上游同名附件替换造成的冷下载失败。已使用根目录默认入口、全新依赖缓存完成三工程构建和最终 14 个产品文件解包比对。运行逻辑、驱动、显示准备、关屏、输入恢复和播放保护均与 0.2.1 相同。`v0.2.1`、`v0.2.0`、`v0.1.9` 与历史安装包保持独立。
+
+This release fixes source-build compatibility. Windows PowerShell 5.1 now reads project files explicitly as UTF-8, preventing Chinese resource paths from being misread under the system ANSI code page. The extraction verifier is pinned to the verified innounp 2.71.3 GitHub asset and SHA256, resolving a cold-download failure caused when upstream replaced a same-named asset. The root default entry built all three projects with a fresh dependency cache and verified all 14 extracted product files. Runtime logic, drivers, display preparation, display-off, input recovery and playback protection are unchanged from 0.2.1. Releases remain independent.
+
+---
+
 # ScreenOffTray 0.2.1
 
 设置界面保留 Pane 风格的三页布局，移除误照搬的橙蓝绿黄几何壁纸，也删除窗口外围的演示底图、外边距和投影；只保留磨砂玻璃窗口本体与圆角透明边。顶层窗口、侧栏和页脚改用不透明雾面材质，消除 WPF 透明窗口在部分显卡上的内容重影，卡片仍保留窗口内部的轻微层次。外观选项调整为浅色、暖白、黑色，默认浅色。安装向导同步采用 Inno Setup 7.1.0 的现代动态向导、浅/深色雾面背景、玻璃卡片和双层月亮标识，并保留系统原生高 DPI、键盘及升级核验流程。显示准备、关屏、输入恢复、播放保护、白名单、快捷键、语言和开机启动逻辑未改。`v0.2.0`、`v0.1.9` 与历史安装包保持独立。

@@ -2,7 +2,7 @@
 
 # ScreenOffTray
 
-[简体中文](README.md) · [Download for Windows](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.1) · [Report an issue](https://github.com/shilefumaoqu/ScreenOffTray/issues)
+[简体中文](README.md) · [Download for Windows](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.2) · [Report an issue](https://github.com/shilefumaoqu/ScreenOffTray/issues)
 
 **Turn off the display while your applications keep running.**
 
@@ -50,7 +50,7 @@ Choose Light, Warm white or Black under About. Simplified Chinese and English ar
 
 ## Install and get started
 
-1. Download `ScreenOffTray-0.2.1-Setup-x64.exe` from [v0.2.1 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.1), run it and approve the Windows administrator prompt. Setup works offline and does not download the .NET runtime.
+1. Download `ScreenOffTray-0.2.2-Setup-x64.exe` from [v0.2.2 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.2), run it and approve the Windows administrator prompt. Setup works offline and does not download the .NET runtime.
 2. During first-time setup, choose “Prepare and enable display off” in Settings. The display may flicker; avoid changing Windows display settings during preparation. If safe matching fails, display-off stays disabled and a reason is shown.
 3. Open Settings from the tray menu to adjust the timeout, shortcut and language. Save applies ordinary drafts; Cancel or closing the window discards them. Display-off is deferred while Settings is open.
 4. Press `Ctrl+Alt+F10` or choose “Turn off now” in the tray menu. Closing Settings leaves the background app running; use “Exit” in the tray menu to quit it.
