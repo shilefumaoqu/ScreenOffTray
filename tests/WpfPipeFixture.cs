@@ -32,10 +32,10 @@ internal static class WpfPipeFixture
                 var state=new ViewState{Version=1,Ready=true,CanClose=true,AudioKnown=true,StatusZh="✓ 显示已就绪",StatusEn="✓ Display ready",
                     Whitelist=Enumerable.Range(0,10).Select(x=>@"C:\Fixture\app"+x+".exe").ToArray(),
                     Sources=new[]{new PlayingSource{Path=playingPath,Name="Fixture icon reader",Whitelisted=false,Protected=false}},
-                    Applied=new FormValues{Minutes=3,Hotkey="Ctrl+Alt+F10",Language=args[1]=="en"?"en":"zh-CN",AutomaticUpdates=true,LimitEnabled=true,LimitMinutes=60,InterfaceTheme="warm"}};
+                    Applied=new FormValues{Minutes=3,Hotkey="Ctrl+Alt+F10",Language=args[1]=="en"?"en":"zh-CN",AutomaticUpdates=true,LimitEnabled=true,LimitMinutes=60,InterfaceTheme="system"}};
                 using(host=new SettingsPipeHost(a=>commands.Add(a),delegate(Packet packet,Action<Packet> result){
                     if(packet.Kind=="save") {
-                        if(packet.Values.Minutes!=4 || packet.Values.LimitMinutes!=87 || packet.Values.InterfaceTheme!="warm")failed=1;
+                        if(packet.Values.Minutes!=4 || packet.Values.LimitMinutes!=87 || packet.Values.InterfaceTheme!="system")failed=1;
                         saved++;state.Applied=packet.Values;state.Version++;host.Publish(state);result(new Packet());
                     }else result(new Packet{Error="Unexpected fixture command"});
                 },delegate{Interlocked.Increment(ref shown);File.WriteAllText(Path.Combine(output,"ready-ms.txt"),clock.Elapsed.TotalMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture));if(!String.IsNullOrEmpty(external))System.Threading.Tasks.Task.Delay(250).ContinueWith(_=>host.Close());},()=>ended.Set(),delegate{})) {
@@ -71,16 +71,16 @@ internal static class WpfPipeFixture
                         if(!image.IsFrozen)throw new Exception("UI icon must be frozen");
                         File.WriteAllText(Path.Combine(Environment.GetEnvironmentVariable("SCREENOFF_WPF_FIXTURE_OUTPUT"),"icon-result.txt"),"PASS actual local notepad executable icon loaded and frozen");timer.Stop();
                         var content=(FrameworkElement)window.Content;
-                        window.SetValues(4,"Ctrl+Alt+F10",state.Applied.Language,false,true,true,87,"geometry");Capture(content,"settings-geometry.png");
+                        window.SetValues(4,"Ctrl+Alt+F10",state.Applied.Language,false,true,true,87,"light");Capture(content,"settings-light.png");
                         ShowPage(window,"playback");Capture(content,"settings-playback.png");
                         ShowPage(window,"about");Capture(content,"settings-about.png");
                         ShowPage(window,"general");
-                        window.SetValues(4,"Ctrl+Alt+F10",state.Applied.Language,false,true,true,87,"black");
-                        if(window.InterfaceTheme!="black")throw new Exception("Black appearance was not applied");
-                        Capture(content,"settings-black.png");
-                        window.SetValues(4,"Ctrl+Alt+F10",state.Applied.Language,false,true,true,87,"warm");
-                        if(window.InterfaceTheme!="warm")throw new Exception("Saved appearance did not survive draft update");
-                        Capture(content,"settings-warm.png");
+                        window.SetValues(4,"Ctrl+Alt+F10",state.Applied.Language,false,true,true,87,"dark");
+                        if(window.InterfaceTheme!="dark")throw new Exception("Dark appearance was not applied");
+                        Capture(content,"settings-dark.png");
+                        window.SetValues(4,"Ctrl+Alt+F10",state.Applied.Language,false,true,true,87,"system");
+                        if(window.InterfaceTheme!="system")throw new Exception("Saved system appearance did not survive draft update");
+                        Capture(content,"settings-system.png");
                         type.GetMethod("Save",flags).Invoke(null,null);
                     }catch(Exception ex){timer.Stop();File.WriteAllText(Path.Combine(Environment.GetEnvironmentVariable("SCREENOFF_WPF_FIXTURE_OUTPUT"),"peer-failure.txt"),ex.ToString());app.Shutdown(7);}
                 };timer.Start();

@@ -1,3 +1,11 @@
+# ScreenOffTray 0.2.3
+
+本版修复两个设置问题。发现稳定新版本后，“检查更新”按钮会明确变为“下载安装包”，优先打开同一 GitHub Release 中名称和 URL 均已核验的 Setup；仍不会自动下载、安装或退出。外观改为 Pane 的“跟随系统／浅色／深色”，暖白不再作为产品主题；旧 `geometry`、`warm` 自动迁移为浅色，旧 `black` 迁移为深色。驱动、显示准备、关屏、输入恢复、播放保护和快捷键规则未修改。`v0.2.2`、`v0.2.1`、`v0.2.0` 与历史安装包保持独立。
+
+This release fixes two Settings issues. When a stable update is found, Check for updates now becomes Download installer and opens the exact matching GitHub Setup asset after URL validation; the app still does not download, install or exit automatically. Appearance now follows Pane's Use system theme / Light / Dark choices. Warm white is no longer a product theme; legacy geometry and warm values migrate to Light, while legacy black maps to Dark. Drivers, display preparation, display-off, input recovery, playback protection and hotkey rules are unchanged. Releases remain independent.
+
+---
+
 # ScreenOffTray 0.2.2
 
 本版修复从源码重新打包时的兼容问题：Windows PowerShell 5.1 现在显式按 UTF-8 读取工程文件，避免中文资源路径被系统 ANSI 编码误读；解包验证工具固定到已核验的 innounp 2.71.3 GitHub 附件和 SHA256，解决上游同名附件替换造成的冷下载失败。已使用根目录默认入口、全新依赖缓存完成三工程构建和最终 14 个产品文件解包比对。运行逻辑、驱动、显示准备、关屏、输入恢复和播放保护均与 0.2.1 相同。`v0.2.1`、`v0.2.0`、`v0.1.9` 与历史安装包保持独立。

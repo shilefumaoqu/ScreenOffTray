@@ -2,7 +2,7 @@
 
 # ScreenOffTray
 
-[English](README_EN.md) · [下载 Windows 安装包](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.2) · [反馈问题](https://github.com/shilefumaoqu/ScreenOffTray/issues)
+[English](README_EN.md) · [下载 Windows 安装包](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.3) · [反馈问题](https://github.com/shilefumaoqu/ScreenOffTray/issues)
 
 **关掉显示器，让程序继续运行。**
 
@@ -44,13 +44,13 @@ ScreenOffTray 是一款 Windows 托盘工具：离开时按快捷键关屏，或
 
 ### 4. 选择顺眼的外观
 
-在「关于」中可选择浅色、暖白或黑色，界面支持简体中文和 English。外观随普通设置一起保存。
+在「关于」中可选择跟随系统、浅色或深色，界面支持简体中文和 English。外观随普通设置一起保存。
 
-![演示切换浅色、暖白与黑色外观](docs/images/guide/theme-zh.gif)
+主题命名与 Pane 保持同一组“跟随系统／浅色／深色”；暖白等参考手册测试背景不再作为产品主题。更新检查发现稳定版本时，按钮会改为“下载安装包”，打开对应的 GitHub 安装包下载；程序仍不会自动安装或退出。
 
 ## 安装与开始使用
 
-1. 从 [v0.2.2 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.2) 下载 `ScreenOffTray-0.2.2-Setup-x64.exe`，运行安装程序并完成 Windows 管理员确认。安装包可离线使用，不下载 .NET 运行时。
+1. 从 [v0.2.3 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.3) 下载 `ScreenOffTray-0.2.3-Setup-x64.exe`，运行安装程序并完成 Windows 管理员确认。安装包可离线使用，不下载 .NET 运行时。
 2. 首次配置时，在设置窗口的准备区选择「自动准备并启用关屏」。准备过程可能闪屏；请不要同时修改 Windows 显示设置。无法安全匹配时，关屏保持停用并显示原因。
 3. 从托盘右键打开设置，调整时间、快捷键和语言。普通设置点击「保存」才生效；关闭窗口或「取消」放弃普通草稿。设置窗口打开期间暂缓关屏。
 4. 需要立即关屏时，使用 `Ctrl+Alt+F10` 或托盘菜单中的「立即关屏」。关闭设置窗口后，后台继续运行；要退出程序，请使用托盘菜单的「退出」。

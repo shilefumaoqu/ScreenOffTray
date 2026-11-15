@@ -314,11 +314,11 @@
                   <Image Source="Assets/app-icon.png" Width="82" Height="82" Stretch="Uniform"/>
                   <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="ScreenOffTray" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource Text1}"/>
-                    <TextBlock Text="版本 0.2.2 · Windows x64" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
+                    <TextBlock Text="版本 0.2.3 · Windows x64" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
                     <TextBlock Text="只关闭显示器，后台程序和任务继续运行。" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
                     <TextBlock x:Name="UpdateStatusText" Visibility="Collapsed" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Accent}" Margin="0,6,0,0"/>
                   </StackPanel>
-                  <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="检查更新" VerticalAlignment="Center" Click="OnUpdateClick"/>
+                  <Button x:Name="UpdateButton" Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="检查更新" VerticalAlignment="Center" Click="OnUpdateClick"/>
                 </Grid>
               </Border>
 
@@ -341,9 +341,9 @@
                     </StackPanel>
                     <Border HorizontalAlignment="Right" Background="{DynamicResource FillControl}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="10" Padding="2">
                       <StackPanel Orientation="Horizontal">
-                        <RadioButton x:Name="GeometryChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="浅色" IsChecked="True" Tag="geometry" Click="OnBackgroundChoice"/>
-                        <RadioButton x:Name="WarmChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="暖白" Tag="warm" Click="OnBackgroundChoice"/>
-                        <RadioButton x:Name="BlackChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="黑色" Tag="black" Click="OnBackgroundChoice"/>
+                        <RadioButton x:Name="SystemChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="跟随系统" Tag="system" Click="OnBackgroundChoice"/>
+                        <RadioButton x:Name="LightChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="浅色" Tag="light" Click="OnBackgroundChoice"/>
+                        <RadioButton x:Name="DarkChoice" Style="{StaticResource SegmentedChoice}" GroupName="PreviewBackground" Content="深色" Tag="dark" Click="OnBackgroundChoice"/>
                       </StackPanel>
                     </Border>
                   </Grid>

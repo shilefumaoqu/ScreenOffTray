@@ -40,7 +40,7 @@ internal static class WpfSettingsLayoutTests
             foreach(bool english in new[]{false,true}) {
                 window=new SettingsWindow(english,new Size(1366,768));
                 string[] paths=Enumerable.Range(0,10).Select(i=>@"C:\IsolatedFixture\app"+i+".exe").ToArray();
-                window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"geometry");
+                window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"system");
                 window.SetList(paths);
                 window.SetSources(new[]{new PlayingSource{Path=paths[0],Name="Fixture player"}},true);
                 window.SetStatus(english?"✓ Display ready":"✓ 显示已就绪","","","");
@@ -66,21 +66,34 @@ internal static class WpfSettingsLayoutTests
                 window.SetPlaybackState(true,false);
                 Check(summary.Text.Contains(english?"limit reached":"上限已到"),tag+" reports that the playback limit ended protection");
 
-                string lightShell=null,warmShell=null,blackShell=null;
-                foreach(string theme in new[]{"geometry","warm","black","geometry"}) {
+                string lightShell=null,darkShell=null,systemShell=null;
+                foreach(string theme in new[]{"system","light","dark","system"}) {
                     window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,theme);
                     Check(window.InterfaceTheme==theme,tag+" applies "+theme+" appearance");
                     string shellColor=((LinearGradientBrush)Field<Border>(window,"Shell").Background).GradientStops[0].Color.ToString();
-                    if(theme=="geometry")lightShell=shellColor;
-                    else if(theme=="warm")warmShell=shellColor;
-                    else blackShell=shellColor;
+                    if(theme=="light")lightShell=shellColor;
+                    else if(theme=="dark")darkShell=shellColor;
+                    else systemShell=shellColor;
                     ShowPage(window,"general");
                     Capture(window,"settings-"+theme+"-"+tag+".png");
                 }
-                Check(lightShell!=warmShell && warmShell!=blackShell && lightShell!=blackShell,tag+" uses distinct top-level colors for all three appearances");
+                Check(lightShell!=darkShell,tag+" uses distinct light and dark top-level colors");
+                Check(systemShell==lightShell || systemShell==darkShell,tag+" resolves system appearance to light or dark");
+                Check(window.FindName("WarmChoice")==null && window.FindName("BlackChoice")==null,tag+" removes the reference test background from product theme choices");
+                Check(Field<RadioButton>(window,"SystemChoice").Content.ToString()==(english?"Use system theme":"跟随系统") && Field<RadioButton>(window,"LightChoice").Content.ToString()==(english?"Light":"浅色") && Field<RadioButton>(window,"DarkChoice").Content.ToString()==(english?"Dark":"深色"),tag+" labels the same system, light and dark theme choices as Pane");
+                window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"geometry");Check(window.InterfaceTheme=="light",tag+" migrates legacy geometry theme to light");
+                window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"warm");Check(window.InterfaceTheme=="light",tag+" migrates removed warm test background to light");
+                window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"black");Check(window.InterfaceTheme=="dark",tag+" migrates legacy black theme to dark");
+                var updateButton=Field<Button>(window,"UpdateButton");
+                window.SetUpdate("found",true);Check(updateButton.Content.ToString()==(english?"Download installer":"下载安装包"),tag+" turns update check into an explicit installer download action");
+                window.SetUpdate("",false);Check(updateButton.Content.ToString()==(english?"Check for updates":"检查更新"),tag+" restores update check when no version is available");
                 Check(window.FindName("GeometryLayer")==null,tag+" removes the reference image's colored geometry wallpaper");
                 ShowPage(window,"playback");Capture(window,"settings-playback-"+tag+".png");
                 ShowPage(window,"about");Capture(window,"settings-about-"+tag+".png");
+                window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"light");
+                window.SetUpdate(english?"Version 0.2.3 is available.":"发现新版本 v0.2.3",true);
+                Capture(window,"settings-about-update-light-"+tag+".png");
+                window.SetUpdate("",false);
                 ShowPage(window,"general");Capture(window,"settings-general-"+tag+".png");
 
                 window.Close();window=null;
