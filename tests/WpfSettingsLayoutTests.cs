@@ -70,7 +70,21 @@ internal static class WpfSettingsLayoutTests
                 foreach(string theme in new[]{"system","light","dark","system"}) {
                     window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,theme);
                     Check(window.InterfaceTheme==theme,tag+" applies "+theme+" appearance");
-                    string shellColor=((LinearGradientBrush)Field<Border>(window,"Shell").Background).GradientStops[0].Color.ToString();
+                    var shellBrush=(LinearGradientBrush)Field<Border>(window,"Shell").Background;
+                    string shellColor=shellBrush.GradientStops[0].Color.ToString();
+                    var fill=((SolidColorBrush)window.FindResource("FillControl"));
+                    if(theme=="light") {
+                        Check(fill.Color.A==0x80,tag+" uses Pane's translucent light control fill");
+                        Check(shellBrush.GradientStops[0].Color.A==0xFC && shellBrush.GradientStops[1].Color.A==0xFC,tag+" uses Pane's light glass tint with a readable fallback");
+                    } else if(theme=="dark") {
+                        Check(fill.Color.A==0x12,tag+" uses Pane's translucent dark control fill");
+                        Check(shellBrush.GradientStops[0].Color.A==0xFC && shellBrush.GradientStops[1].Color.A==0xFC,tag+" uses Pane's dark glass tint with a readable fallback");
+                    }
+                    if(theme!="system") {
+                        var edge=((LinearGradientBrush)Field<Border>(window,"Shell").BorderBrush).GradientStops;
+                        byte[] expected=theme=="light"?new byte[]{0x86,0x28,0x0D,0x3C}:new byte[]{0x27,0x18,0x12,0x1A};
+                        Check(edge.Count==4 && edge[0].Color.A==expected[0] && edge[1].Color.A==expected[1] && edge[2].Color.A==expected[2] && edge[3].Color.A==expected[3],tag+" applies Pane's "+theme+" edge highlight");
+                    }
                     if(theme=="light")lightShell=shellColor;
                     else if(theme=="dark")darkShell=shellColor;
                     else systemShell=shellColor;
@@ -91,11 +105,10 @@ internal static class WpfSettingsLayoutTests
                 ShowPage(window,"playback");Capture(window,"settings-playback-"+tag+".png");
                 ShowPage(window,"about");Capture(window,"settings-about-"+tag+".png");
                 window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"light");
-                window.SetUpdate(english?"Version 0.2.3 is available.":"发现新版本 v0.2.3",true);
+                window.SetUpdate(english?"Version 0.2.4 is available.":"发现新版本 v0.2.4",true);
                 Capture(window,"settings-about-update-light-"+tag+".png");
                 window.SetUpdate("",false);
                 ShowPage(window,"general");Capture(window,"settings-general-"+tag+".png");
-
                 window.Close();window=null;
             }
             window=new SettingsWindow(false,new Size(640,360));

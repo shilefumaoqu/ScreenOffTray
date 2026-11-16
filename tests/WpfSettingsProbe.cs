@@ -18,15 +18,20 @@ internal static class WpfSettingsProbe
     [STAThread] private static int Main(string[] args)
     {
         if(args.Length!=4)return 2; // Only the private-desktop supervisor supplies this shape.
-        try {return Run(args[0],args[1]=="en",args[1]=="visible");}
+        try {return Run(args[0],args[1]=="en"||args[1].StartsWith("visible-en",StringComparison.Ordinal),args[1]);}
         catch(Exception ex){File.WriteAllText(Path.Combine(args[0],"failure.txt"),ex.ToString());return 1;}
     }
-    private static int Run(string output,bool english,bool visible)
+    private static int Run(string output,bool english,string mode)
     {
+        bool visible=mode=="visible"||mode.StartsWith("visible-",StringComparison.Ordinal);
         var timer=Stopwatch.StartNew();var preload=SettingsWindow.PreloadArtwork();var app=new Application{ShutdownMode=ShutdownMode.OnMainWindowClose};
         preload.GetAwaiter().GetResult();
         var window=new SettingsWindow(english);
-        if(visible)window.Title="ScreenOffTray · WPF 隔离测试";
+        if(visible) {
+            window.Title="ScreenOffTray · WPF 隔离测试";
+            string theme=mode=="visible-light"?"light":"dark";
+            window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,theme);
+        }
         window.SetList(new[]{"Chrome","网易云音乐","VLC","Windows Media Player","mpv","PotPlayer","Spotify","MusicBee","foobar2000","Firefox"});
         window.SaveRequested+=()=>window.SetError(english?"Isolated draft validated; no files saved.":"隔离草稿已检查；未保存任何正式设置。");
         window.WhitelistAddRequested+=()=>window.SetError("Fake callback only");

@@ -100,7 +100,7 @@ namespace ScreenOffTray.SettingsUi
             {
                 string value;
                 if(StaticTranslations.TryGetValue(text.Text,out value))text.Text=value;
-                else if(text.Text=="版本 0.2.3 · Windows x64")text.Text="Version 0.2.3 · Windows x64";
+                else if(text.Text=="版本 0.2.4 · Windows x64")text.Text="Version 0.2.4 · Windows x64";
             }
             var control=root as ContentControl;
             if(control!=null && control.Content is string)
@@ -430,17 +430,17 @@ namespace ScreenOffTray.SettingsUi
             SystemChoice.IsChecked=backgroundMode=="system";LightChoice.IsChecked=backgroundMode=="light";DarkChoice.IsChecked=backgroundMode=="dark";
             if(dark)
             {
-                Resources["Text1"]=MakeBrush("#F2FFFFFF");Resources["Text2"]=MakeBrush("#A6FFFFFF");Resources["Text3"]=MakeBrush("#70FFFFFF");
-                Resources["Stroke"]=MakeBrush("#18FFFFFF");Resources["FillControl"]=MakeBrush("#20FFFFFF");Resources["FillHover"]=MakeBrush("#18FFFFFF");
-                Resources["FillSelected"]=MakeBrush("#20FFFFFF");Resources["WarningSurface"]=MakeBrush("#2AF5A524");Resources["DangerSurface"]=MakeBrush("#28E5484D");Resources["SuccessSurface"]=MakeBrush("#2035B880");
-                Shell.Background=MakeGradient("#FF1C1C20","#FF161619");SidebarSurface.Background=MakeBrush("#FF202126");FooterBar.Background=MakeBrush("#FF18191D");Shell.BorderBrush=MakeBrush("#22FFFFFF");
+                Resources["Text1"]=MakeBrush("#F0FFFFFF");Resources["Text2"]=MakeBrush("#A3FFFFFF");Resources["Text3"]=MakeBrush("#66FFFFFF");
+                Resources["Stroke"]=MakeBrush("#14FFFFFF");Resources["FillControl"]=MakeBrush("#12FFFFFF");Resources["FillHover"]=MakeBrush("#10FFFFFF");
+                Resources["FillSelected"]=MakeBrush("#1FFFFFFF");Resources["WarningSurface"]=MakeBrush("#2AF5A524");Resources["DangerSurface"]=MakeBrush("#28E5484D");Resources["SuccessSurface"]=MakeBrush("#2035B880");
+                Shell.Background=MakeGradient("#FC1C1C20","#FC161619");SidebarSurface.Background=MakeBrush("#FC202126");FooterBar.Background=MakeBrush("#FF18191D");Shell.BorderBrush=MakeEdgeBrush(true);
             }
             else
             {
                 Resources["Text1"]=MakeBrush("#EB141418");Resources["Text2"]=MakeBrush("#9E141418");Resources["Text3"]=MakeBrush("#6B141418");
-                Resources["Stroke"]=MakeBrush("#14000000");Resources["FillControl"]=MakeBrush("#DFFFFFFF");Resources["FillHover"]=MakeBrush("#0C000000");
-                Resources["FillSelected"]=MakeBrush("#CFFFFFFF");Resources["WarningSurface"]=MakeBrush("#FFF8E8");Resources["DangerSurface"]=MakeBrush("#FFF0F0");Resources["SuccessSurface"]=MakeBrush("#EEF9F2");
-                Shell.Background=MakeGradient("#FFF6F6F8","#FFE7ECF2");SidebarSurface.Background=MakeBrush("#FFEDF0F3");FooterBar.Background=MakeBrush("#FFF4F5F7");Shell.BorderBrush=MakeBrush("#24000000");
+                Resources["Stroke"]=MakeBrush("#14000000");Resources["FillControl"]=MakeBrush("#80FFFFFF");Resources["FillHover"]=MakeBrush("#0C000000");
+                Resources["FillSelected"]=MakeBrush("#9EFFFFFF");Resources["WarningSurface"]=MakeBrush("#FFF8E8");Resources["DangerSurface"]=MakeBrush("#FFF0F0");Resources["SuccessSurface"]=MakeBrush("#EEF9F2");
+                Shell.Background=MakeGradient("#FCF6F6F8","#FCF1F1F5");SidebarSurface.Background=MakeBrush("#FCEDF0F3");FooterBar.Background=MakeBrush("#FFF4F5F7");Shell.BorderBrush=MakeEdgeBrush(false);
             }
         }
 
@@ -472,6 +472,15 @@ namespace ScreenOffTray.SettingsUi
         private static LinearGradientBrush MakeGradient(string from,string to)
         {
             var brush=new LinearGradientBrush(ParseColor(from),ParseColor(to),90);brush.Freeze();return brush;
+        }
+        private static LinearGradientBrush MakeEdgeBrush(bool dark)
+        {
+            var brush=new LinearGradientBrush{StartPoint=new Point(.5,0),EndPoint=new Point(.5,1)};
+            brush.GradientStops.Add(new GradientStop(ParseColor(dark?"#27FFFFFF":"#86FFFFFF"),0));
+            brush.GradientStops.Add(new GradientStop(ParseColor(dark?"#18FFFFFF":"#28FFFFFF"),.3));
+            brush.GradientStops.Add(new GradientStop(ParseColor(dark?"#12FFFFFF":"#0DFFFFFF"),.7));
+            brush.GradientStops.Add(new GradientStop(ParseColor(dark?"#1AFFFFFF":"#3CFFFFFF"),1));
+            brush.Freeze();return brush;
         }
         private static T FindAncestor<T>(DependencyObject value) where T:DependencyObject
         {

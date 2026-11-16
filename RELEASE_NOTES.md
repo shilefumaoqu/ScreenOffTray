@@ -1,3 +1,11 @@
+# ScreenOffTray 0.2.4
+
+本版按 Pane 参考包的固定材质令牌重新校准设置窗口玻璃：保留中性蓝灰外层、淡填充控件、细高光边和跟随系统／浅色／深色三套外观，不再带入参考手册的几何壁纸或外围舞台。WPF 无法使用 Pane 的 HostBackdrop 合成器，实际桌面截图显示低透明度会使后方文字透入；本版采用约 98% 可读性表面回退，并继续保留轻卡片层级和玻璃边缘。设置窗口从同一源码重新编译并完成实际桌面浅色、深色对照；驱动、显示准备、关屏、输入恢复、播放保护和快捷键规则未修改。`v0.2.3`、`v0.2.2`、`v0.2.1`、`v0.2.0` 与历史安装包保持独立。
+
+This release recalibrates Settings glass against Pane's fixed material tokens: the neutral blue-gray shell, translucent control fills, fine highlight edge and System / Light / Dark appearances remain, while the reference manual's geometry wallpaper and display stage stay out of the product. WPF does not expose Pane's HostBackdrop compositor; desktop captures showed that low-opacity surfaces let background text interfere with reading, so this build uses a roughly 98% readable-surface fallback while retaining the light card layers and glass edge. The Settings window was rebuilt from the same source and checked with live desktop captures in Light and Dark. Drivers, display preparation, display-off, input recovery, playback protection and hotkey rules are unchanged. Releases remain independent.
+
+---
+
 # ScreenOffTray 0.2.3
 
 本版修复两个设置问题。发现稳定新版本后，“检查更新”按钮会明确变为“下载安装包”，优先打开同一 GitHub Release 中名称和 URL 均已核验的 Setup；仍不会自动下载、安装或退出。外观改为 Pane 的“跟随系统／浅色／深色”，暖白不再作为产品主题；旧 `geometry`、`warm` 自动迁移为浅色，旧 `black` 迁移为深色。驱动、显示准备、关屏、输入恢复、播放保护和快捷键规则未修改。`v0.2.2`、`v0.2.1`、`v0.2.0` 与历史安装包保持独立。

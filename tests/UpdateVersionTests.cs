@@ -16,7 +16,7 @@ namespace ScreenOffTray.Tests {
             private readonly string url;
             internal AssetFake(string value){url=value;}
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token) {
-                string json="{\"draft\":false,\"prerelease\":false,\"tag_name\":\"v0.2.3\",\"html_url\":\"https://github.com/test/repo/releases/tag/v0.2.3\",\"assets\":[{\"name\":\"ScreenOffTray-0.2.3-Setup-x64.exe\",\"browser_download_url\":\""+url+"\"}]}";
+                string json="{\"draft\":false,\"prerelease\":false,\"tag_name\":\"v0.2.4\",\"html_url\":\"https://github.com/test/repo/releases/tag/v0.2.4\",\"assets\":[{\"name\":\"ScreenOffTray-0.2.4-Setup-x64.exe\",\"browser_download_url\":\""+url+"\"}]}";
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage=request, Content=new StringContent(json) });
             }
         }
@@ -38,15 +38,18 @@ namespace ScreenOffTray.Tests {
             Test("0.2.2","v0.2.3",UpdateCheckStatus.Available);
             Test("0.2.3","v0.2.2",UpdateCheckStatus.UpToDate);
             Test("0.2.3","v0.2.3",UpdateCheckStatus.UpToDate);
-            using(var client=new UpdateChecker("test/repo",new Version("0.2.2"),new AssetFake("https://github.com/test/repo/releases/download/v0.2.3/ScreenOffTray-0.2.3-Setup-x64.exe"),TimeSpan.FromSeconds(2),16384)) {
+            Test("0.2.3","v0.2.4",UpdateCheckStatus.Available);
+            Test("0.2.4","v0.2.3",UpdateCheckStatus.UpToDate);
+            Test("0.2.4","v0.2.4",UpdateCheckStatus.UpToDate);
+            using(var client=new UpdateChecker("test/repo",new Version("0.2.3"),new AssetFake("https://github.com/test/repo/releases/download/v0.2.4/ScreenOffTray-0.2.4-Setup-x64.exe"),TimeSpan.FromSeconds(2),16384)) {
                 var result=client.CheckAsync(CancellationToken.None).GetAwaiter().GetResult();
-                if(result.Status!=UpdateCheckStatus.Available || result.InstallerDownload==null || result.InstallerDownload.AbsoluteUri!="https://github.com/test/repo/releases/download/v0.2.3/ScreenOffTray-0.2.3-Setup-x64.exe")throw new Exception("Exact installer asset was not selected");
+                if(result.Status!=UpdateCheckStatus.Available || result.InstallerDownload==null || result.InstallerDownload.AbsoluteUri!="https://github.com/test/repo/releases/download/v0.2.4/ScreenOffTray-0.2.4-Setup-x64.exe")throw new Exception("Exact installer asset was not selected");
             }
-            using(var client=new UpdateChecker("test/repo",new Version("0.2.2"),new AssetFake("https://example.invalid/ScreenOffTray-0.2.3-Setup-x64.exe"),TimeSpan.FromSeconds(2),16384)) {
+            using(var client=new UpdateChecker("test/repo",new Version("0.2.3"),new AssetFake("https://example.invalid/ScreenOffTray-0.2.4-Setup-x64.exe"),TimeSpan.FromSeconds(2),16384)) {
                 var result=client.CheckAsync(CancellationToken.None).GetAwaiter().GetResult();
                 if(result.Status!=UpdateCheckStatus.Available || result.InstallerDownload!=null)throw new Exception("Unexpected installer URL was accepted");
             }
-            using(var client=new UpdateChecker("test/repo",new Version("0.2.2"),new AssetFake("https://github.com/test/repo/releases/download/V0.2.3/ScreenOffTray-0.2.3-Setup-x64.exe"),TimeSpan.FromSeconds(2),16384)) {
+            using(var client=new UpdateChecker("test/repo",new Version("0.2.3"),new AssetFake("https://github.com/test/repo/releases/download/V0.2.4/ScreenOffTray-0.2.4-Setup-x64.exe"),TimeSpan.FromSeconds(2),16384)) {
                 var result=client.CheckAsync(CancellationToken.None).GetAwaiter().GetResult();
                 if(result.Status!=UpdateCheckStatus.Available || result.InstallerDownload!=null)throw new Exception("Case-mismatched release tag was accepted");
             }
@@ -56,7 +59,7 @@ namespace ScreenOffTray.Tests {
                 if(checker.CheckAsync(CancellationToken.None).Result.Status!=UpdateCheckStatus.NotConfigured || field.GetValue(checker)!=null)throw new Exception("Blank update source created HTTP client");
             }
             if(unused.Disposals!=1)throw new Exception("Unconsumed handler ownership was not released once");
-            Console.WriteLine("PASS 22 actual update-parser and installer-asset checks; fake HTTP only"); return 0;
+            Console.WriteLine("PASS 25 actual update-parser and installer-asset checks; fake HTTP only"); return 0;
             } catch(Exception error) { Console.WriteLine(error.GetType().FullName); Console.WriteLine(error.Message); return 1; }
         }
         private static void Test(string current,string tag,UpdateCheckStatus expected) {
