@@ -48,6 +48,9 @@ namespace ScreenOffTray.SettingsTransport
         public string UpdateZh {get;set;}
         public string UpdateEn {get;set;}
         public bool UpdateAvailable {get;set;}
+        public bool UpdateCanDownload {get;set;}
+        public string UpdatePhase {get;set;}
+        public int UpdatePercent {get;set;}
         public string[] Whitelist {get;set;}
         public PlayingSource[] Sources {get;set;}
         public FormValues Applied {get;set;}

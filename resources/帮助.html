@@ -2,7 +2,7 @@
 <html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ScreenOffTray 使用帮助 / Help</title>
 <style>body{font:16px/1.7 "Microsoft YaHei UI","Segoe UI",sans-serif;color:#202020;background:#fafafa;max-width:740px;margin:40px auto;padding:0 24px}h1{font-size:28px}h2{font-size:21px;margin-top:32px}kbd{font:inherit;background:#eee;border:1px solid #ccc;border-radius:4px;padding:1px 5px}a{color:#075ca8}li{margin:8px 0}hr{border:0;border-top:1px solid #ccc;margin:40px 0}</style>
-<h1>自动关屏 · ScreenOffTray 0.2.5</h1>
+<h1>自动关屏 · ScreenOffTray 0.2.6</h1>
 <p>只关闭显示器，继续运行当前程序和后台任务。适用于 Windows 10 22H2 / Windows 11 x64，以及一个实体显示器。</p>
 <h2>开始使用</h2>
 <ol><li>打开安装包，按 Windows 提示完成管理员确认。已有可用虚拟显示驱动会直接复用；日常使用不需要管理员权限。</li><li>安装完成后核对启动结果；需要配置时自动打开设置引导，升级且已就绪时直接进入托盘。点击“一键准备”，程序按当前实体屏的实际像素尺寸检查虚拟模式；横屏、竖屏和不同宽高比使用同一流程，不固定某个分辨率或缩放。</li><li>Windows 已列出精确模式时直接复用，不改配置、不重载。缺少模式时，程序在普通权限允许的配置中保留原内容、备份原件并补充模式，必要时请求管理员确认，仅重新载入已核实的唯一虚拟设备。期间可能闪屏或改变布局；不卸载驱动、不关闭其他软件，也不会自动重启电脑。</li><li>设备重载后重新建立显示基线，再进入受保护准备，核对真实分辨率和缩放，完成后回到仅实体屏显示。显示“已就绪”后关闭设置，继续在托盘运行。准备期间请勿同时修改 Windows 显示设置。</li><li>驱动不接受模式、缩放不匹配、配置受保护、外部配置变更或设备要求重启时，会说明原因并保持关屏停用。分辨率已补充不代表缩放已匹配；设备重载前的旧快照不保证跨重载恢复。技术信息见“诊断详情”。</li><li>托盘右键是小菜单，“设置…”打开独立窗口；关闭窗口后继续在托盘运行。普通设置点保存生效，白名单增删即时保存。新用户默认空闲 10 分钟，识别到唯一旧设置时保留；开机启动默认关闭。</li></ol>
@@ -20,14 +20,15 @@
 <p>升级或卸载前，请先在托盘正常退出。安装器不会强制结束正在运行的托盘程序。卸载保留个人设置；复用其他安装已存在的驱动设备不会被本产品删除。系统需要重启时会提示，由你决定何时重启。</p>
 <p>程序位于 Program Files；日志和恢复快照位于 <code>%LOCALAPPDATA%\ScreenOffTray\运行记录</code>。请勿在关屏过程中手动删除快照。安装包完全离线；首版应用尚未购买代码签名证书，Windows 可能显示未知发布者，驱动文件保留原始签名。</p>
 <h2>更新</h2>
-<p>托盘菜单保持精简。打开“设置…”后，可在合并设置中查看当前版本、开启或关闭自动检查，并手动检查更新。自动检查默认开启，每次启动检查一次，只在发现新版时通知。取消勾选并保存后，自动检查停止；手动检查仍可用。发现新版时按钮会改为“下载安装包”，优先打开同一 Release 中经过名称和 URL 校验的安装包；程序不会自动下载、安装更新或结束自己。</p>
+<p>在“关于”页检查更新，选择“下载更新”可查看进度、取消或重试。下载必须匹配官方 Release 的精确安装包名称、HTTPS 地址、长度与 SHA256；缺少校验信息时只能手动下载。校验后点击“保存并重启更新”，保存当前草稿并正常退出，再由 Windows 请求安装权限。自动检查默认开启，每次启动检查一次，只通知新版；取消勾选并保存后停止自动检查，手动检查仍可用。</p>
+<p>0.2.5 及更早版本须手动安装一次 0.2.6 才能获得此功能。更新保留设置，仅复用已有驱动，不强杀程序或自动重启 Windows。安全退出超时时不会安装，会提示等待托盘退出后从开始菜单重开重试；安装失败只在旧文件仍完整一致时重开旧版，否则提示检查安装状态。</p>
 <p>更新源为 <code>shilefumaoqu/ScreenOffTray</code> 的 GitHub Releases。自动检查默认开启，只读取稳定版本；发现新版时提示并提供下载入口，不会自动安装或结束程序。旧版本 Release 和安装包保持独立。</p>
 <h2>显示或显卡疑问</h2>
 <p>混合显卡电脑的实体屏由集成显卡输出，并不等于独立显卡无法渲染。虚拟屏对自动独显直连切换的影响仍未验证。需要游戏或独显直连时，先从托盘退出，并在 Windows 显示设置核对虚拟屏已断开。</p>
 <p>显示条件不符时，程序暂停关屏。安装后会直接进入独立首次配置引导，检查通过才显示“已就绪，开始使用”。显示条件不符时，引导会说明如何处理，并留在同一窗口供重新检查；关闭可稍后处理。首次配置未完成时，程序不会关屏。正常就绪启动保持安静。同一次运行的相同未解决异常不反复弹窗，可随时从托盘“设置…”查看。发生恢复失败时请保留运行记录，并使用旧版回退材料，避免盲目重装其他软件的显示驱动。</p>
 <hr>
 <section lang="en"><h1>ScreenOffTray Help</h1>
-<p>Turns off the display while applications and background tasks continue. Version 0.2.5 targets Windows 10 22H2 / Windows 11 x64 with one physical display.</p>
+<p>Turns off the display while applications and background tasks continue. Version 0.2.6 targets Windows 10 22H2 / Windows 11 x64 with one physical display.</p>
 <h2>Get started</h2>
 <p>After installation, choose “Complete setup” or “Adapt display”. The same flow uses the current physical source pixel dimensions for landscape, portrait and different aspect ratios. If Windows already lists the exact virtual mode, no configuration or device reload is needed. Otherwise, the app preserves and backs up a supported, writable configuration, adds the mode, then requests administrator approval only for restarting the verified virtual device. This may flicker or change the display layout; it does not uninstall drivers, close other apps or reboot Windows automatically.</p>
 <p>After reload, setup captures a fresh display baseline and runs the existing protected resolution and DPI checks. Only then does it leave physical display only and report Ready. Do not change Windows display settings during preparation. A mode entry alone does not prove matching DPI; failure leaves display off disabled. A pre-reload snapshot is not guaranteed to restore a reloaded device's changed identities.</p>
@@ -47,7 +48,8 @@
 <p>Exit normally from the tray first. Setup does not force-close the app. Uninstall retains user settings and never removes a reused device belonging to another installation. Restart prompts are explicit and do not automatically restart Windows.</p>
 <p>Runtime files are stored at <code>%LOCALAPPDATA%\ScreenOffTray\运行记录</code>. Do not delete recovery snapshots during an active session. This offline installer contains the original signed virtual display driver. The application itself currently has no purchased code-signing certificate.</p>
 <h2>Updates</h2>
-<p>To keep the tray menu compact, update controls are in the combined Settings window. It shows the current version and offers Check for updates. When a stable update is found, the button changes to Download installer and opens the expected installer asset after its exact name and repository URL are verified. The app never downloads, installs or exits automatically.</p>
+<p>In About, check for updates and choose Download update for progress, cancellation and retry. The download must match the official Release asset name, HTTPS URL, length and SHA256. Missing verification data leaves manual download available. After verification, Save and restart to update saves the current draft, exits normally and requests Windows installation approval. Automatic checks are enabled by default and run once at startup; they only notify. Disabling them does not disable manual checks.</p>
+<p>Version 0.2.5 and earlier require one manual installation of 0.2.6 to gain this feature. Updates preserve settings and reuse the existing driver, without force-closing processes or automatically rebooting Windows. Safe-exit timeouts stop installation and explain how to reopen after the tray exits. Installation failure restarts the previous version only when its files still match; otherwise it asks you to inspect the installation state.</p>
 <p>The update source is the stable GitHub Releases feed for <code>shilefumaoqu/ScreenOffTray</code>. Automatic checks are on by default; a newer release only produces a notification and download entry. The app never installs an update or exits automatically. Older releases remain available.</p>
 <h2>Compatibility boundary</h2>
 <p>Virtual display effects on automatic discrete-GPU display switching remain unverified. An integrated-GPU output route alone does not show that the discrete GPU has stopped rendering. Review Windows display settings before workflows that require direct discrete-GPU output. Ready startup stays silent. A confirmed unready startup opens the focused setup guide with the cause and next steps. The same unresolved issue does not repeatedly reopen the window during that run. Open Settings from the tray to review display preparation at any time.</p></section></html>

@@ -66,7 +66,9 @@ namespace ScreenOffTray.SettingsUi
             next.DisplaySettingsRequested+=delegate {Send("displaySettings");};
             next.PrepareRequested+=delegate {Send("prepare");};
             next.CancelPrepareRequested+=delegate {Send("cancelPrepare");};
-            next.UpdateRequested+=delegate {Send("checkUpdate");};
+            next.UpdateRequested+=UpdateAction;
+            next.CancelUpdateRequested+=delegate {Send("cancelUpdate");};
+            next.ManualUpdateRequested+=delegate {Send("manualUpdate");};
             next.CaptureChanged+=focus=>client.Notify(new Packet{Kind="capture",Flag=focus});
             next.LanguageRequested+=delegate {
                 if(changingLanguage || window!=next)return;
@@ -91,7 +93,7 @@ namespace ScreenOffTray.SettingsUi
             window.SetStatus(en?state.StatusEn:state.StatusZh,first==null?(en?"No apps playing":"暂无正在播放的程序"):first.Name,
                 first==null?"":(en?"Playing":"正在播放"),en?state.ProtectionEn:state.ProtectionZh);
             window.SetPlaybackState(state.PlaybackLimitReached,state.UserPaused);
-            window.SetList(state.Whitelist??new string[0]);window.SetSources(state.Sources,state.AudioKnown);window.SetUpdate(en?state.UpdateEn:state.UpdateZh,state.UpdateAvailable);
+            window.SetList(state.Whitelist??new string[0]);window.SetSources(state.Sources,state.AudioKnown);window.SetUpdate(en?state.UpdateEn:state.UpdateZh,state.UpdateAvailable,state.UpdatePhase,state.UpdatePercent,state.UpdateCanDownload);
             window.SetMigrationChoices(state.MigrationChoices);window.SetListBusy(listChanging || state.SavingWhitelist);
             window.ShowSetup(state.Ready,state.Checking,state.Preparing,state.CanPrepare,en?state.DetailEn:state.DetailZh,state.Diagnostics);
             if(disconnected)window.SetDisconnected();else window.SetBusy(saving || state.Saving);
@@ -111,6 +113,16 @@ namespace ScreenOffTray.SettingsUi
             catch(Exception ex){if(window!=null)window.SetError(ex.Message);}
             finally{saving=false;if(window!=null){if(disconnected)window.SetDisconnected();else window.SetBusy(false);}}
         }
+        private static async void UpdateAction()
+        {
+            if(saving || disconnected || state==null)return;
+            window.SetError("");
+            if(state.UpdatePhase!="ready"){Send("checkUpdate");return;}
+            var draft=Draft();saving=true;window.SetBusy(true);
+            try {var result=await client.Command(new Packet{Kind="applyUpdate",Values=draft});if(window!=null && !String.IsNullOrEmpty(result.Error))window.SetError(result.Error);}
+            catch(Exception ex){if(window!=null)window.SetError(ex.Message);}
+            finally{saving=false;if(window!=null && state!=null)Present();}
+        }
         private static void Add(string path)
         {if(state==null || state.Sources==null || state.Sources.Length==0)return;ChangeList("whitelistAdd",path);}
         private static void Remove()
@@ -127,6 +139,7 @@ namespace ScreenOffTray.SettingsUi
         {
             if(sender!=window || changingLanguage || closingFromBackend || disconnected)return;
             if(saving){args.Cancel=true;return;}
+            if(state!=null && state.UpdatePhase=="applying"){args.Cancel=true;return;}
             if(state!=null && !state.CanClose){args.Cancel=true;if(!closing){closing=true;Send("cancelPrepare");}window.SetError("正在安全结束准备，请稍候。 / Finishing preparation safely.");}
         }
     }

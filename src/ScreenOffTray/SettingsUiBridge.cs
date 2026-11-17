@@ -108,8 +108,8 @@ namespace ScreenOffTray
             Func<bool,string> detail=en=>_settingsFailure!=null?_settingsFailure:!_displayOffSupported?LocalizeSession(_displayOffUnavailableReason,en):SetupDetail(en);
             return new ViewState{
                 Version=_snapshotVersion,StatusZh=heading(false),StatusEn=heading(true),Ready=ready,Checking=_setup.Checking,Preparing=_setup.Preparing,
-                CanPrepare=_migrationDone && !_session.IsBusy && !_exiting && !_savingSettings && _settingsFailure==null && !_setup.HasVerifiedProfile && _setup.CanPrepareDisplay,
-                CanClose=!_savingSettings && !_setup.Preparing,Saving=_savingSettings,SavingWhitelist=_savingWhitelist,
+                CanPrepare=_migrationDone && !_session.IsBusy && !_exiting && !_savingSettings && !_updateApplying && _settingsFailure==null && !_setup.HasVerifiedProfile && _setup.CanPrepareDisplay,
+                CanClose=!_savingSettings && !_setup.Preparing && !_updateApplying,Saving=_savingSettings || _updateApplying,SavingWhitelist=_savingWhitelist,
                 DetailZh=detail(false),DetailEn=detail(true),Diagnostics=String.Join("\r\n",new[]{_setup.Diagnostics,panel.SettingsWarning,panel.Audio!=null && !panel.Audio.Known?panel.Audio.Error:null,_uiFailure}).Trim(),
                 ProtectionZh=panel.Timing.Blocked || panel.Timing.PlaybackLimitReached?AutoOffStatusText.Format(panel.Timing,_timeoutMinutes,false):"",
                 ProtectionEn=panel.Timing.Blocked || panel.Timing.PlaybackLimitReached?AutoOffStatusText.Format(panel.Timing,_timeoutMinutes,true):"",
@@ -122,6 +122,7 @@ namespace ScreenOffTray
                 }).ToArray(),
                 Whitelist=whitelist,MigrationChoices=_migrationChoices==null?new int[0]:(int[])_migrationChoices.Clone(),
                 UpdateZh=UpdateText(false),UpdateEn=UpdateText(true),UpdateAvailable=_updateResult!=null && _updateResult.Status==UpdateCheckStatus.Available,
+                UpdateCanDownload=_updateResult!=null && _updateResult.CanDownload,UpdatePhase=_updateChecking?"checking":_updatePhase,UpdatePercent=_downloadPercent,
                 Applied=new FormValues{Minutes=_timeoutMinutes,Hotkey=_session.Hotkey.Serialize(),Language=_text.English?"en":"zh-CN",Startup=_startupEnabled,
                     AutomaticUpdates=_autoUpdatesEnabled,LimitEnabled=_playbackOptions.PlaybackLimitEnabled,LimitMinutes=_playbackOptions.PlaybackLimitMinutes,
                     InterfaceTheme=theme}
@@ -139,14 +140,10 @@ namespace ScreenOffTray
             string error=null,code=null;
             try {
                 if(_exiting){completed(new Packet{Error="程序正在退出 / Application is exiting",Code="closing"});return;}
+                if(_updateApplying){completed(new Packet{Error="正在准备更新 / Preparing update",Code="busy"});return;}
                 switch(request.Kind) {
                     case "save":
-                        if(request.Values==null){error="Invalid settings";break;}
-                        HotkeyBinding binding;string reason;
-                        if(!HotkeyBinding.TryParse(request.Values.Hotkey,out binding,out reason)){error=reason;break;}
-                        error=await SaveSettingsAsync(new SettingsValues{TimeoutMinutes=request.Values.Minutes,Hotkey=binding,HotkeyEdited=request.Values.HotkeyEdited,Language=request.Values.Language,
-                            Startup=request.Values.Startup,AutomaticUpdateChecks=request.Values.AutomaticUpdates,PlaybackLimitEnabled=request.Values.LimitEnabled,PlaybackLimitMinutes=request.Values.LimitMinutes,
-                            InterfaceTheme=request.Values.InterfaceTheme});break;
+                        error=await SaveUiValues(request.Values);break;
                     case "whitelistAdd":case "whitelistRemove":
                         if(request.Paths==null || request.Paths.Length!=1){error="Invalid allowlist operation";break;}
                         string path=ExeIdentity.Normalize(request.Paths[0]);if(path==null){error="Invalid executable identity";break;}
@@ -162,7 +159,10 @@ namespace ScreenOffTray
                     case "cancelPrepare":_setup.CancelPreparation();break;
                     case "recheck":if(!_setup.Preparing && !_session.IsBusy)_setup.Recheck();else error="Display operation is busy";break;
                     case "refresh":_audioMonitor.RequestRefresh();break;
-                    case "checkUpdate":if(_updateResult!=null && _updateResult.Status==UpdateCheckStatus.Available) {if(!OpenUpdateRelease())error=_text.Pick("无法打开下载页面，请稍后重试。","Could not open the download page. Try again later.");}else CheckForUpdates(false);break;
+                    case "checkUpdate":if(_updateResult!=null && _updateResult.Status==UpdateCheckStatus.Available)DownloadUpdate();else CheckForUpdates(false);break;
+                    case "cancelUpdate":CancelDownload();break;
+                    case "manualUpdate":if(!OpenUpdateRelease())error="无法打开下载页面 / Could not open the download page";break;
+                    case "applyUpdate":error=await ApplyUpdate(request.Values);break;
                     case "displaySettings":System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:display"){UseShellExecute=true});break;
                     default:error="Unsupported settings command";code="unsupported_command";break;
                 }
@@ -171,16 +171,30 @@ namespace ScreenOffTray
         }
         private string UpdateText(bool en)
         {
+            if(_updatePhase=="applying")return en?"Saving settings and preparing a safe restart…":"正在保存设置并准备安全重启…";
+            if(_updatePhase=="downloading")return (en?"Downloading installer… ":"正在下载安装包… ")+_downloadPercent+"%";
+            if(_updatePhase=="verifying")return en?"Verifying installer SHA256…":"正在校验安装包 SHA256…";
+            if(_updatePhase=="ready")return (en?"Installer verified. Save and restart to update.":"安装包已校验。保存设置并重启以更新。")+(String.IsNullOrEmpty(_downloadError)?"":"\n"+_downloadError);
+            if(_updatePhase=="failed")return (en?"Update could not continue. Check again or download manually. ":"更新未能继续，可重新检查或手动下载。 ")+_downloadError;
+            if(_updatePhase=="cancelled")return en?"Download cancelled. You can retry.":"下载已取消，可重新下载。";
             if(!_updates.IsConfigured)return en?"The update source is not configured yet.":"更新源尚未配置。";
             if(_updateChecking)return en?"Checking…":"正在检查…";
             if(_updateResult==null)return "";
             switch(_updateResult.Status){
-                case UpdateCheckStatus.Available:return (en?"Version ":"发现新版本 v")+_updateResult.LatestVersion+(en?" is available.":"");
+                case UpdateCheckStatus.Available:return (en?"Version ":"发现新版本 v")+_updateResult.LatestVersion+(en?" is available.":"")+(_updateResult.CanDownload?"":(en?" Verification data unavailable; use manual download.":" 缺少校验信息，请手动下载。"));
                 case UpdateCheckStatus.UpToDate:return en?"You’re up to date.":"已是最新版本。";
                 case UpdateCheckStatus.NoRelease:return en?"No stable release is available yet.":"暂未发布可用的正式版本。";
                 case UpdateCheckStatus.Failed:return en?"Could not check for updates. Try again later.":"检查失败，请稍后重试。";
                 default:return "";
             }
+        }
+        private Task<string> SaveUiValues(FormValues values)
+        {
+            if(values==null)return Task.FromResult("Invalid settings");
+            HotkeyBinding binding;string reason;
+            if(!HotkeyBinding.TryParse(values.Hotkey,out binding,out reason))return Task.FromResult(reason);
+            return SaveSettingsAsync(new SettingsValues{TimeoutMinutes=values.Minutes,Hotkey=binding,HotkeyEdited=values.HotkeyEdited,Language=values.Language,
+                Startup=values.Startup,AutomaticUpdateChecks=values.AutomaticUpdates,PlaybackLimitEnabled=values.LimitEnabled,PlaybackLimitMinutes=values.LimitMinutes,InterfaceTheme=values.InterfaceTheme});
         }
         private void QueueExitPromptHistory()
         {

@@ -47,6 +47,7 @@ namespace ScreenOffTray.SettingsUi
         internal event Action DisplaySettingsRequested;
         public event Action<bool> CaptureChanged;
         public event Action SaveRequested,WhitelistAddRequested,WhitelistRemoveRequested,RecheckRequested,RefreshRequested,UpdateRequested;
+        public event Action CancelUpdateRequested,ManualUpdateRequested;
         public event Action PrepareRequested,CancelPrepareRequested,LanguageRequested;
         internal event Action<string> AddPathRequested;
         internal bool ShortcutEdited {get;set;}
@@ -127,7 +128,7 @@ namespace ScreenOffTray.SettingsUi
             {
                 string value;
                 if(StaticTranslations.TryGetValue(text.Text,out value))text.Text=value;
-                else if(text.Text=="版本 0.2.5 · Windows x64")text.Text="Version 0.2.5 · Windows x64";
+                else if(text.Text=="版本 0.2.6 · Windows x64")text.Text="Version 0.2.6 · Windows x64";
             }
             var control=root as ContentControl;
             if(control!=null && control.Content is string)
@@ -310,12 +311,19 @@ namespace ScreenOffTray.SettingsUi
             PrepareStateText.Foreground=(Brush)FindResource(success?"Success":warning?"Warning":"Text2");
         }
 
-        public void SetUpdate(string value,bool available)
+        public void SetUpdate(string value,bool available,string phase="",int percent=0,bool canDownload=true)
         {
             UpdateStatusText.Text=value??"";
             UpdateStatusText.Visibility=String.IsNullOrEmpty(value)?Visibility.Collapsed:Visibility.Visible;
-            UpdateButton.Content=available?T("下载安装包","Download installer"):T("检查更新","Check for updates");
-            UpdateButton.ToolTip=available?T("打开 GitHub 安装包下载","Open the GitHub installer download"):T("检查更新","Check for updates");
+            bool transferring=phase=="downloading" || phase=="verifying",applying=phase=="applying";
+            UpdateButton.Content=phase=="ready"?T("保存并重启更新","Save and restart to update"):
+                transferring?T("正在下载…","Downloading…"):applying?T("正在准备…","Preparing…"):
+                available?(canDownload?T("下载更新","Download update"):T("手动下载","Download manually")):T("检查更新","Check for updates");
+            UpdateButton.ToolTip=phase=="ready"?T("保存当前设置，正常退出后由 Windows 请求安装权限","Save settings, exit safely, then request Windows installation approval"):UpdateButton.Content;
+            UpdateButton.IsEnabled=!transferring && !applying && phase!="checking";
+            UpdateProgress.Visibility=transferring?Visibility.Visible:Visibility.Collapsed;UpdateProgress.Value=Math.Max(0,Math.Min(100,percent));
+            CancelUpdateButton.Visibility=transferring?Visibility.Visible:Visibility.Collapsed;CancelUpdateButton.Content=T("取消下载","Cancel download");
+            ManualUpdateButton.Visibility=available && !transferring && !applying?Visibility.Visible:Visibility.Collapsed;ManualUpdateButton.Content=T("手动下载","Manual download");
         }
 
         public void SetError(string value)
@@ -426,6 +434,8 @@ namespace ScreenOffTray.SettingsUi
         private void OnRefreshPlayback(object sender,RoutedEventArgs e){if(RefreshRequested!=null)RefreshRequested();}
         private void OnRemoveWhitelist(object sender,RoutedEventArgs e){if(WhitelistRemoveRequested!=null)WhitelistRemoveRequested();}
         private void OnUpdateClick(object sender,RoutedEventArgs e){if(UpdateRequested!=null)UpdateRequested();}
+        private void OnCancelUpdateClick(object sender,RoutedEventArgs e){if(CancelUpdateRequested!=null)CancelUpdateRequested();}
+        private void OnManualUpdateClick(object sender,RoutedEventArgs e){if(ManualUpdateRequested!=null)ManualUpdateRequested();}
         private void OnHelpClick(object sender,RoutedEventArgs e)
         {
             string path=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"帮助.html");

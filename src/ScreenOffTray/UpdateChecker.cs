@@ -22,19 +22,24 @@ namespace ScreenOffTray
         public Uri ReleasePage { get; private set; }
         public Uri InstallerDownload { get; private set; }
         public string Error { get; private set; }
+        public long InstallerBytes {get;private set;}
+        public string InstallerSha256 {get;private set;}
+        public bool CanDownload {get{return InstallerDownload!=null && InstallerBytes>0 && InstallerBytes<=UpdateChecker.MaximumInstallerBytes && InstallerSha256!=null;}}
 
-        internal UpdateCheckResult(UpdateCheckStatus status, Version version, Uri page, string error, Uri installerDownload = null)
+        internal UpdateCheckResult(UpdateCheckStatus status, Version version, Uri page, string error, Uri installerDownload = null,long bytes=0,string sha256=null)
         {
             Status = status;
             LatestVersion = version;
             ReleasePage = page;
             Error = error;
             InstallerDownload = installerDownload;
+            InstallerBytes=bytes;InstallerSha256=sha256;
         }
     }
 
     public sealed class UpdateChecker : IDisposable
     {
+        internal const long MaximumInstallerBytes=128L*1024*1024;
         private const int DefaultBodyLimit = 256 * 1024;
         private HttpClient client;
         private HttpMessageHandler pendingHandler;
@@ -225,13 +230,15 @@ namespace ScreenOffTray
                 !Uri.TryCreate(page, UriKind.Absolute, out releasePage))
                 return Result(UpdateCheckStatus.Failed, "Unexpected GitHub release page.");
 
-            Uri installerDownload = FindInstallerDownload(release, tag, latest);
+            long bytes;string sha256;
+            Uri installerDownload = FindInstallerDownload(release, tag, latest,out bytes,out sha256);
             return new UpdateCheckResult(Normalize(latest).CompareTo(Normalize(currentVersion)) > 0
-                ? UpdateCheckStatus.Available : UpdateCheckStatus.UpToDate, latest, releasePage, null, installerDownload);
+                ? UpdateCheckStatus.Available : UpdateCheckStatus.UpToDate, latest, releasePage, null, installerDownload,bytes,sha256);
         }
 
-        private Uri FindInstallerDownload(Dictionary<string,object> release,string tag,Version version)
+        private Uri FindInstallerDownload(Dictionary<string,object> release,string tag,Version version,out long bytes,out string sha256)
         {
+            bytes=0;sha256=null;
             object value;
             if (!release.TryGetValue("assets", out value)) return null;
             var assets = value as object[];
@@ -251,7 +258,14 @@ namespace ScreenOffTray
                 Uri result;
                 if (url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
                     String.Equals(url.Substring(prefix.Length),exactSuffix,StringComparison.Ordinal) &&
-                    Uri.TryCreate(url,UriKind.Absolute,out result)) return result;
+                    Uri.TryCreate(url,UriKind.Absolute,out result)) {
+                    object length,digest;long count;
+                    if(asset.TryGetValue("size",out length) && length!=null && Int64.TryParse(Convert.ToString(length,System.Globalization.CultureInfo.InvariantCulture),out count) && count>0 && count<=MaximumInstallerBytes &&
+                        asset.TryGetValue("digest",out digest) && digest is string && Regex.IsMatch((string)digest,@"\Asha256:[0-9a-fA-F]{64}\z")) {
+                        bytes=count;sha256=((string)digest).Substring(7).ToUpperInvariant();
+                    }
+                    return result;
+                }
             }
             return null;
         }

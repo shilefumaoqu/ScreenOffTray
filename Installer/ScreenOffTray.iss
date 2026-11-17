@@ -4,7 +4,7 @@
 #endif
 
 #ifndef ReleaseVersion
-#define ReleaseVersion "0.2.5"
+#define ReleaseVersion "0.2.6"
 #endif
 #ifndef RollbackOnly
 #define RollbackOnly "0"
@@ -117,8 +117,8 @@ begin
     if not GetVersionNumbers(AddBackslash(WizardDirValue)+'ScreenOffTray.exe',VersionMS,VersionLS) then begin
       Result := '无法核实旧程序版本，已停止升级。'; Exit;
     end;
-    { Numeric file version 0.2.5.0; the separate rollback package explicitly permits downgrade. }
-    if (VersionMS > 2) or ((VersionMS = 2) and (VersionLS > 327680)) then begin
+    { Numeric file version 0.2.6.0; the separate rollback package explicitly permits downgrade. }
+    if (VersionMS > 2) or ((VersionMS = 2) and (VersionLS > 393216)) then begin
       Result := '已安装版本更高，请使用对应版本安装包。'; Exit;
     end;
   end;
@@ -158,6 +158,9 @@ function InitializeSetup: Boolean;
 begin
   IsUpgrade := RegKeyExists(HKLM64, ProductUninstallKey);
   ResumeFirstInstall := ExpandConstant('{param:RESUMEFIRSTINSTALL|0}') = '1';
+  if (ExpandConstant('{param:UPDATEONLY|0}') = '1') and ((not IsUpgrade) or ResumeFirstInstall or ('{#RollbackOnly}' = '1')) then begin
+    Result := False; MsgBox('应用内更新仅用于已有安装，不能首次安装、续跑驱动安装或执行回退。', mbError, MB_OK); Exit;
+  end;
   if ResumeFirstInstall and ((not IsUpgrade) or ('{#RollbackOnly}' = '1') or WizardSilent) then begin
     Result := False; MsgBox('首次安装续跑仅适用于已有待重启安装，且不能静默或通过回退包执行。', mbError, MB_OK); Exit;
   end;

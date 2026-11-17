@@ -77,6 +77,9 @@
     <Compile Include="VirtualModeNative.cs" />
     <Compile Include="SetupPromptPolicy.cs" />
     <Compile Include="UpdateChecker.cs" />
+    <Compile Include="UpdateDownload.cs" />
+    <Compile Include="UpdateInstall.cs" />
+    <Compile Include="TrayUpdates.cs" />
     <Compile Include="TrayMenu.cs" />
     <Compile Include="..\Shared\DisplayBackend.cs" />
     <Compile Include="Oled\InputGate.cs" />
