@@ -2,7 +2,7 @@
 
 # ScreenOffTray
 
-[English](README_EN.md) · [下载 Windows 安装包](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.4) · [反馈问题](https://github.com/shilefumaoqu/ScreenOffTray/issues)
+[English](README_EN.md) · [下载 Windows 安装包](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.5) · [反馈问题](https://github.com/shilefumaoqu/ScreenOffTray/issues)
 
 **关掉显示器，让程序继续运行。**
 
@@ -54,7 +54,7 @@ ScreenOffTray 是一款 Windows 托盘工具：离开时按快捷键关屏，或
 
 ## 安装与开始使用
 
-1. 从 [v0.2.4 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.4) 下载 `ScreenOffTray-0.2.4-Setup-x64.exe`，运行安装程序并完成 Windows 管理员确认。安装包可离线使用，不下载 .NET 运行时。
+1. 从 [v0.2.4 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.5) 下载 `ScreenOffTray-0.2.5-Setup-x64.exe`，运行安装程序并完成 Windows 管理员确认。安装包可离线使用，不下载 .NET 运行时。
 2. 首次配置时，在设置窗口的准备区选择「自动准备并启用关屏」。准备过程可能闪屏；请不要同时修改 Windows 显示设置。无法安全匹配时，关屏保持停用并显示原因。
 3. 从托盘右键打开设置，调整时间、快捷键和语言。普通设置点击「保存」才生效；关闭窗口或「取消」放弃普通草稿。设置窗口打开期间暂缓关屏。
 4. 需要立即关屏时，使用 `Ctrl+Alt+F10` 或托盘菜单中的「立即关屏」。关闭设置窗口后，后台继续运行；要退出程序，请使用托盘菜单的「退出」。

@@ -122,7 +122,7 @@ internal static class WpfSettingsLayoutTests
                 ShowPage(window,"playback");Capture(window,"settings-playback-"+tag+".png");
                 ShowPage(window,"about");Capture(window,"settings-about-"+tag+".png");
                 window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"light");
-                window.SetUpdate(english?"Version 0.2.4 is available.":"发现新版本 v0.2.4",true);
+                window.SetUpdate(english?"Version 0.2.5 is available.":"发现新版本 v0.2.5",true);
                 Capture(window,"settings-about-update-light-"+tag+".png");
                 window.SetUpdate("",false);
                 ShowPage(window,"general");Capture(window,"settings-general-"+tag+".png");

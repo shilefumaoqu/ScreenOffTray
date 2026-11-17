@@ -1,3 +1,15 @@
+# ScreenOffTray 0.2.5
+
+提高文件、界面、安装器和公开 Release 版本到 0.2.5，解决已运行本地 0.2.4 的用户无法通过同版本号发现后续玻璃修复的问题。更新检查仍比较版本，不把同号包误认为更新；现有 0.2.4 可发现独立 0.2.5 并打开安装包下载。
+
+沿用已通过审查与实拍的原生 Desktop Acrylic、主题和界面；玻璃及业务运行逻辑没有新增改动。AppId、AssemblyVersion、设置路径、驱动、显示准备、关屏、输入恢复及播放保护保持不变。保留 0.2.4 及历史包，不自动覆盖安装。
+
+This patch advances the file, UI, installer and public Release versions to 0.2.5. Users already running a local 0.2.4 build can now discover the later glass fix as a strictly newer version and open its Setup download. The update checker continues comparing versions; it does not treat a same-version package as an update.
+
+The reviewed and photographed Desktop Acrylic implementation is unchanged. AppId, AssemblyVersion, settings paths, drivers, display preparation, display-off, input recovery and playback protection remain unchanged. Version 0.2.4 and older packages stay independent. No automatic installation is performed.
+
+---
+
 # ScreenOffTray 0.2.4
 
 设置窗口接入真正的 Windows Desktop Acrylic 背景模糊，替代接近实色的表面。保持同一浅色窗口，在外部蓝、橙背景上完成真实桌面实拍：色调随背景变化，背后的文字和黑白纹理明显柔化，窗口自己的文字保持清楚。保留跟随系统／浅色／深色、Pane 风格控件与高光，不包含参考壁纸。系统不支持原生材质、关闭透明效果或高对比度时明确回退实色，不将其算作玻璃通过。

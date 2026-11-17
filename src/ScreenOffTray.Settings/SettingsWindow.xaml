@@ -314,7 +314,7 @@
                   <Image Source="Assets/app-icon.png" Width="82" Height="82" Stretch="Uniform"/>
                   <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="ScreenOffTray" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource Text1}"/>
-                    <TextBlock Text="版本 0.2.4 · Windows x64" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
+                    <TextBlock Text="版本 0.2.5 · Windows x64" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
                     <TextBlock Text="只关闭显示器，后台程序和任务继续运行。" FontSize="12" Foreground="{DynamicResource Text2}" Margin="0,5,0,0"/>
                     <TextBlock x:Name="UpdateStatusText" Visibility="Collapsed" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Accent}" Margin="0,6,0,0"/>
                   </StackPanel>
