@@ -127,7 +127,7 @@ namespace ScreenOffTray.SettingsUi
             {
                 string value;
                 if(StaticTranslations.TryGetValue(text.Text,out value))text.Text=value;
-                else if(text.Text=="版本 0.2.4 · Windows x64")text.Text="Version 0.2.4 · Windows x64";
+                else if(text.Text=="版本 0.2.5 · Windows x64")text.Text="Version 0.2.5 · Windows x64";
             }
             var control=root as ContentControl;
             if(control!=null && control.Content is string)
