@@ -1,3 +1,21 @@
+# ScreenOffTray 0.2.6
+
+新增应用内更新：在“关于”页下载新版，显示进度并支持取消、重试和手动下载。软件核对官方 Release 的精确安装包名称、HTTPS 地址、大小与 SHA256，校验后由用户点击“保存并重启更新”，保存当前设置草稿、正常退出，再请求 Windows 安装权限。没有常驻更新服务。
+
+更新入口仅支持已登记安装，只读核验并复用原有驱动，不转入首次驱动安装；不会强杀产品或其他软件，也不会自动重启 Windows。安装失败只在旧版本文件完整一致时重开旧版。失效缓存包可重新检查下载，安全退出超时会明确提示恢复方法。
+
+**从 0.2.5 及更早版本升级到 0.2.6，仍需手动下载安装一次；应用内更新用于之后的新版本。** 保留原生玻璃、主题、设置路径、AppId、AssemblyVersion、关屏与恢复规则。旧版本继续独立保留。
+
+已完成隔离下载与控制器用例、中英文 UI 协议检查、实际 GitHub 下载与哈希校验及代码审查。未覆盖安装本机正式程序，真实 UAC、文件替换与安装后完整运行未计作通过；见 [版本验证](docs/版本验证.md)。
+
+Adds in-app updates with download progress, cancellation, retry and manual fallback. Official Release asset names, HTTPS URLs, size and SHA256 are verified. “Save and restart to update” explicitly saves the current settings draft, exits normally and asks Windows for installation approval. No resident update service is added.
+
+The update path requires a registered installation and reuses its driver after read-only verification. It cannot enter first-time driver installation, force-close applications or automatically reboot Windows. Failures restart the old version only when its files still match. Rejected cached packages allow a fresh check; safe-exit timeouts explain manual recovery.
+
+**Users on 0.2.5 or earlier must manually install 0.2.6 once to gain the updater for future versions.** Native glass, themes, settings paths, AppId, AssemblyVersion and display-off/recovery rules are preserved. Previous releases remain available. Isolated tests, actual GitHub download/hash checks and code review were completed; real UAC, file replacement and post-install operation were not tested on the host.
+
+---
+
 # ScreenOffTray 0.2.5
 
 提高文件、界面、安装器和公开 Release 版本到 0.2.5，解决已运行本地 0.2.4 的用户无法通过同版本号发现后续玻璃修复的问题。更新检查仍比较版本，不把同号包误认为更新；现有 0.2.4 可发现独立 0.2.5 并打开安装包下载。

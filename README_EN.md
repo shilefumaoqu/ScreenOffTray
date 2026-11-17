@@ -2,7 +2,7 @@
 
 # ScreenOffTray
 
-[简体中文](README.md) · [Download for Windows](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.5) · [Report an issue](https://github.com/shilefumaoqu/ScreenOffTray/issues)
+[简体中文](README.md) · [Download for Windows](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.6) · [Report an issue](https://github.com/shilefumaoqu/ScreenOffTray/issues)
 
 **Turn off the display while your applications keep running.**
 
@@ -50,16 +50,16 @@ Version 0.2.4 adds real desktop Acrylic: the window takes on background color, s
 
 ![Actual desktop Acrylic Settings window](docs/images/glass/blue.png)
 
-The theme choices use Pane's System / Light / Dark naming. Reference-manual test backgrounds such as Warm white are no longer product themes. When a stable update is available, the button changes to Download installer and opens that GitHub installer asset; the app still never installs automatically or exits.
+The theme choices use Pane's System / Light / Dark naming. Reference-manual test backgrounds such as Warm white are no longer product themes. Version 0.2.6 adds in-app downloads with progress, cancellation and retry. After verification, “Save and restart to update” saves the current draft, exits normally and requests Windows installation approval. Automatic checks only notify; they never start a download or installation.
 
 ## Install and get started
 
-1. Download `ScreenOffTray-0.2.5-Setup-x64.exe` from [v0.2.4 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.5), run it and approve the Windows administrator prompt. Setup works offline and does not download the .NET runtime.
+1. Download `ScreenOffTray-0.2.6-Setup-x64.exe` from [v0.2.6 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.6), run it and approve the Windows administrator prompt. Setup works offline and does not download the .NET runtime.
 2. During first-time setup, choose “Prepare and enable display off” in Settings. The display may flicker; avoid changing Windows display settings during preparation. If safe matching fails, display-off stays disabled and a reason is shown.
 3. Open Settings from the tray menu to adjust the timeout, shortcut and language. Save applies ordinary drafts; Cancel or closing the window discards them. Display-off is deferred while Settings is open.
 4. Press `Ctrl+Alt+F10` or choose “Turn off now” in the tray menu. Closing Settings leaves the background app running; use “Exit” in the tray menu to quit it.
 
-Before upgrading, exit the previous version normally from the tray. Setup does not force-close it and keeps existing settings. Everyday use does not require administrator rights. The application and installer are not code-signed; the driver retains its upstream signature.
+Upgrading from 0.2.5 or earlier requires one manual installer download: exit the previous version normally from the tray, then install. Version 0.2.6 contains the in-app updater for future releases. Setup preserves settings and does not force-close the application. Everyday use does not require administrator rights. The application and installer are not code-signed; the driver retains its upstream signature.
 
 ## Playback protection and limits
 
@@ -77,7 +77,7 @@ The app uses a virtual display driver to keep the desktop running. Effects on au
 
 ## Updates, development and license
 
-Settings can check for stable updates. Automatic checks are enabled by default and only provide a download link; they never install or quit the app. Older installers remain available in [Releases](https://github.com/shilefumaoqu/ScreenOffTray/releases).
+In About, check for updates, choose “Download update”, then “Save and restart to update” after verification. In-app downloads require the exact official Release asset name, HTTPS URL, length and SHA256. Missing verification data leaves manual download available. Automatic checks only notify. Safe-exit timeouts and installation failures show recovery instructions; the updater never force-kills processes, restarts Windows automatically or installs drivers. Older installers remain available in [Releases](https://github.com/shilefumaoqu/ScreenOffTray/releases).
 
 Built with .NET Framework 4.8 / C# 5, with a WinForms background app and a separate WPF Settings process. See [build and verification](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/docs/构建与验证.md) and [version validation](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/docs/版本验证.md).
 

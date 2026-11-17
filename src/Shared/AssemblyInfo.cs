@@ -6,5 +6,5 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyProduct("ScreenOffTray")]
 // Keep the existing settings version stable; file/product versions identify releases.
 [assembly: AssemblyVersion("0.0.0.0")]
-[assembly: AssemblyFileVersion("0.2.5.0")]
+[assembly: AssemblyFileVersion("0.2.6.0")]
 [assembly: ComVisible(false)]

@@ -116,7 +116,15 @@ internal static class WpfSettingsLayoutTests
                 window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"warm");Check(window.InterfaceTheme=="light",tag+" migrates removed warm test background to light");
                 window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"black");Check(window.InterfaceTheme=="dark",tag+" migrates legacy black theme to dark");
                 var updateButton=Field<Button>(window,"UpdateButton");
-                window.SetUpdate("found",true);Check(updateButton.Content.ToString()==(english?"Download installer":"下载安装包"),tag+" turns update check into an explicit installer download action");
+                window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"light");
+                ShowPage(window,"about");
+                window.SetUpdate("found",true);Check(updateButton.Content.ToString()==(english?"Download update":"下载更新"),tag+" offers in-app download for a verifiable installer");
+                window.SetUpdate("downloading",true,"downloading",42);Check(!updateButton.IsEnabled && Field<ProgressBar>(window,"UpdateProgress").Value==42 && Field<Button>(window,"CancelUpdateButton").IsVisible,tag+" download shows progress and an accessible cancel action");
+                window.SetUpdate("verified",true,"ready",100);Check(updateButton.IsEnabled && updateButton.Content.ToString()==(english?"Save and restart to update":"保存并重启更新") && !Field<ProgressBar>(window,"UpdateProgress").IsVisible,tag+" verified package requires explicit save and restart");
+                Capture(window,"settings-update-ready-"+tag+".png");
+                window.SetUpdate("failed",true,"failed");Check(updateButton.IsEnabled && Field<Button>(window,"ManualUpdateButton").IsVisible,tag+" failed download supports retry and manual recovery");
+                window.SetUpdate("missing digest",true,"",0,false);Check(updateButton.Content.ToString()==(english?"Download manually":"手动下载"),tag+" unverifiable release never offers in-app installation");
+                window.SetUpdate("applying",true,"applying");Check(!updateButton.IsEnabled && !Field<Button>(window,"CancelUpdateButton").IsVisible,tag+" committed installation cannot be resubmitted");
                 window.SetUpdate("",false);Check(updateButton.Content.ToString()==(english?"Check for updates":"检查更新"),tag+" restores update check when no version is available");
                 Check(window.FindName("GeometryLayer")==null,tag+" removes the reference image's colored geometry wallpaper");
                 ShowPage(window,"playback");Capture(window,"settings-playback-"+tag+".png");

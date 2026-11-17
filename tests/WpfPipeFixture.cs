@@ -25,7 +25,8 @@ internal static class WpfPipeFixture
         try {
             var commands=new BlockingCollection<Action>();var owner=new Thread(delegate(){foreach(var command in commands.GetConsumingEnumerable())command();}){IsBackground=true};owner.Start();
             string external=Environment.GetEnvironmentVariable("SCREENOFF_UI_BENCH_BINARY");
-            int saved=0,shown=0;Environment.SetEnvironmentVariable("SCREENOFF_WPF_FIXTURE_OUTPUT",output);var clock=Stopwatch.StartNew();
+            bool update=Environment.GetEnvironmentVariable("SCREENOFF_UPDATE_FIXTURE")=="1";
+            int saved=0,shown=0,downloads=0,cancels=0,updates=0;Environment.SetEnvironmentVariable("SCREENOFF_WPF_FIXTURE_OUTPUT",output);var clock=Stopwatch.StartNew();
             using(var ended=new ManualResetEvent(false)) {
                 SettingsPipeHost host=null;
                 string playingPath=Environment.GetFolderPath(Environment.SpecialFolder.System)+@"\notepad.exe";
@@ -34,18 +35,29 @@ internal static class WpfPipeFixture
                     Sources=new[]{new PlayingSource{Path=playingPath,Name="Fixture icon reader",Whitelisted=false,Protected=false}},
                     Applied=new FormValues{Minutes=3,Hotkey="Ctrl+Alt+F10",Language=args[1]=="en"?"en":"zh-CN",AutomaticUpdates=true,LimitEnabled=true,LimitMinutes=60,InterfaceTheme="system"}};
                 using(host=new SettingsPipeHost(a=>commands.Add(a),delegate(Packet packet,Action<Packet> result){
+                    if(update) {
+                        if(packet.Kind=="checkUpdate") {downloads++;state.UpdatePhase=downloads==1?"downloading":"ready";state.UpdatePercent=42;}
+                        else if(packet.Kind=="cancelUpdate") {cancels++;state.UpdatePhase="cancelled";}
+                        else if(packet.Kind=="applyUpdate") {
+                            updates++;if(packet.Values.Minutes!=4 || packet.Values.LimitMinutes!=87 || packet.Values.InterfaceTheme!="system")failed=1;
+                            state.UpdatePhase="applying";state.Saving=true;state.CanClose=false;
+                            System.Threading.Tasks.Task.Delay(300).ContinueWith(_=>host.Close());
+                        }else failed=1;
+                        state.Version++;host.Publish(state);result(new Packet());return;
+                    }
                     if(packet.Kind=="save") {
                         if(packet.Values.Minutes!=4 || packet.Values.LimitMinutes!=87 || packet.Values.InterfaceTheme!="system")failed=1;
                         saved++;state.Applied=packet.Values;state.Version++;host.Publish(state);result(new Packet());
                     }else result(new Packet{Error="Unexpected fixture command"});
                 },delegate{Interlocked.Increment(ref shown);File.WriteAllText(Path.Combine(output,"ready-ms.txt"),clock.Elapsed.TotalMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture));if(!String.IsNullOrEmpty(external))System.Threading.Tasks.Task.Delay(250).ContinueWith(_=>host.Close());},()=>ended.Set(),delegate{})) {
+                    if(update){state.UpdateAvailable=true;state.UpdateCanDownload=true;state.UpdateZh="发现新版本，准备下载";state.UpdateEn="New release available";}
                     host.Start(String.IsNullOrEmpty(external)?typeof(WpfPipeFixture).Assembly.Location:external,args[1]);host.Publish(state);
                     if(!ended.WaitOne(12000))throw new Exception("UI fixture did not exit normally");
-                    if(saved!=(String.IsNullOrEmpty(external)?1:0) || shown!=1 || failed!=0)throw new Exception("Unexpected saves/shown/result: "+saved+"/"+shown+"/"+failed);
+                    if(saved!=(update?0:String.IsNullOrEmpty(external)?1:0) || shown!=1 || failed!=0 || (update && (downloads!=2 || cancels!=1 || updates!=1)))throw new Exception("Unexpected saves/shown/result/update commands: "+saved+"/"+shown+"/"+failed+"/"+downloads+"/"+cancels+"/"+updates);
                 }
             }
             commands.CompleteAdding();owner.Join(1000);commands.Dispose();
-            File.WriteAllText(Path.Combine(output,"fixture-result.txt"),"PASS real UI Program, fake owner and ten-entry state; normal save/exit; private non-input desktop; no product Main, hooks, display or formal writes");return 0;
+            File.WriteAllText(Path.Combine(output,"fixture-result.txt"),"PASS real UI Program, fake owner and ten-entry state; "+(update?"download/cancel/retry/save-draft-and-apply command exchange":"normal save/exit")+"; private non-input desktop; no product Main, hooks, display, installer or formal writes");return 0;
         }catch(Exception ex){File.WriteAllText(Path.Combine(output,"failure.txt"),ex.ToString());return 1;}
     }
     private static int Peer(string[] args)
@@ -56,13 +68,21 @@ internal static class WpfPipeFixture
             var until=Stopwatch.StartNew();while(Application.Current==null && until.ElapsedMilliseconds<5000)Thread.Sleep(10);
             var app=Application.Current;if(app==null)return;
             app.Dispatcher.BeginInvoke(new Action(delegate {
-                var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(20)};int attempts=0;
+                var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(20)};int attempts=0,updateStep=0;
                 timer.Tick+=delegate {
                     var type=typeof(ScreenOffTray.SettingsUi.Program);var flags=BindingFlags.NonPublic|BindingFlags.Static;
                     var state=type.GetField("state",flags).GetValue(null) as ViewState;
                     var window=app.MainWindow as ScreenOffTray.SettingsUi.SettingsWindow;
                     if(state==null || window==null){if(attempts++>200){timer.Stop();app.Shutdown(8);}return;}
                     try {
+                        if(Environment.GetEnvironmentVariable("SCREENOFF_UPDATE_FIXTURE")=="1") {
+                            if(updateStep==0) {window.SetValues(4,"Ctrl+Alt+F10",state.Applied.Language,false,true,true,87,"system");ShowPage(window,"about");updateStep++;Click(window,"UpdateButton");}
+                            else if(updateStep==1 && state.UpdatePhase=="downloading") {Capture((FrameworkElement)window.Content,"update-downloading.png");updateStep++;Click(window,"CancelUpdateButton");}
+                            else if(updateStep==2 && state.UpdatePhase=="cancelled") {updateStep++;Click(window,"UpdateButton");}
+                            else if(updateStep==3 && state.UpdatePhase=="ready") {Capture((FrameworkElement)window.Content,"update-ready.png");updateStep++;Click(window,"UpdateButton");timer.Stop();}
+                            else if(attempts++>300)throw new Exception("Update UI fixture stalled at "+updateStep);
+                            return;
+                        }
                         var icons=window.GetType().GetField("icons",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(window) as ScreenOffTray.SettingsUi.ApplicationIcons;
                         // Real local icon extraction runs through the production cache;
                         // the executable identity and all player/settings data are fake.
@@ -92,6 +112,7 @@ internal static class WpfPipeFixture
     private static string DesktopName()
     {var name=new StringBuilder(256);int needed;if(!GetUserObjectInformation(GetThreadDesktop(GetCurrentThreadId()),2,name,name.Capacity*2,out needed))throw new System.ComponentModel.Win32Exception();return name.ToString();}
     private static void ShowPage(ScreenOffTray.SettingsUi.SettingsWindow window,string page){window.GetType().GetMethod("ShowPage",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(window,new object[]{page});}
+    private static void Click(Window window,string name){((Button)window.FindName(name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}
     private static void Capture(FrameworkElement content,string name)
     {
         var frame=new DispatcherFrame();

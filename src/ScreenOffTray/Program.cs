@@ -8,10 +8,12 @@ namespace ScreenOffTray
     {
         internal const string MutexName = @"Local\ScreenOffTray";
 
-        internal enum EntryMode { Tray, Setup, SupportCheck, SelfTest, Watchdog, Recover, InstallationCheck, Invalid, LaunchVerified, StartupReport }
+        internal enum EntryMode { Tray, Setup, SupportCheck, SelfTest, Watchdog, Recover, InstallationCheck, Invalid, LaunchVerified, StartupReport, ApplyUpdate }
         internal static EntryMode SelectMode(string[] args)
         {
             if (args == null || args.Length == 0) return EntryMode.Tray;
+            Guid updateId;
+            if(args.Length==2 && args[0]=="--apply-update" && Guid.TryParseExact(args[1],"N",out updateId))return EntryMode.ApplyUpdate;
             if (args.Length == 1 && String.Equals(args[0], "--setup", StringComparison.OrdinalIgnoreCase))
                 return EntryMode.Setup;
             if ((args.Length == 2 || args.Length == 3) && String.Equals(args[0], "--installation-check", StringComparison.OrdinalIgnoreCase))
@@ -33,6 +35,7 @@ namespace ScreenOffTray
         private static void Main(string[] args)
         {
             EntryMode mode = SelectMode(args);
+            if(mode==EntryMode.ApplyUpdate){Environment.ExitCode=UpdateInstall.Run(args[1]);return;}
             if(mode==EntryMode.LaunchVerified){Environment.ExitCode=VerifiedLaunch.Run(args.Length==2);return;}
             if (mode == EntryMode.InstallationCheck)
             {

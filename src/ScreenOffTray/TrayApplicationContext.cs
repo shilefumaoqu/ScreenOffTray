@@ -79,7 +79,7 @@ namespace ScreenOffTray
             } catch (Exception ex) { _settingsFailure = ex.Message; }
             _setupPrompts = new SetupPromptPolicy(introShown, lastNotice, previouslyPrepared);
             // Cheap gate only. Native readiness work never runs inside the hook.
-            _session = new OledSession(delegate { return _migrationDone && !_exiting && !_savingSettings && _settingsFailure==null && !_hotkeyEditing && _setup != null && _setup.IsReady; }, binding, ReadAutomaticProtection);
+            _session = new OledSession(delegate { return _migrationDone && !_exiting && !_savingSettings && !_updateApplying && _settingsFailure==null && !_hotkeyEditing && _setup != null && _setup.IsReady; }, binding, ReadAutomaticProtection);
             _setup = new DisplaySetupState(Post, PostSetupCompletion);
             _setup.RecoveryStopConfirmationAvailable += _session.TrackRecoveryStop;
             _session.ManualRequested = TurnOffDisplaysNow;
@@ -198,7 +198,7 @@ namespace ScreenOffTray
         private bool StartAutomaticSetup()
         {
             try {
-                if (_savingSettings || _settingsFailure!=null || _session.IsBusy || _exiting || !_migrationDone || _setup.Preparing) return false;
+                if (_savingSettings || _updateApplying || _settingsFailure!=null || _session.IsBusy || _exiting || !_migrationDone || _setup.Preparing) return false;
                 ReleaseIdlePowerRequest();return _setup.PrepareDisplay();
             } finally {
                 // A fresh read-only check can reject a start after the button's
@@ -341,7 +341,7 @@ namespace ScreenOffTray
             if (ShouldTrigger(_paused, _triggeredForIdlePeriod, idleMilliseconds, _timeoutMinutes, false) && TryStartDisplayOffSession(true)) _triggeredForIdlePeriod = true;
         }
         private bool TryStartDisplayOffSession(bool automatic)
-        { return !_exiting && !_savingSettings && _settingsFailure==null && !_hotkeyEditing && _displayOffSupported && _migrationDone && _setup.IsReady && _session.CanStartSession && _session.TryBegin(automatic); }
+        { return !_exiting && !_savingSettings && !_updateApplying && _settingsFailure==null && !_hotkeyEditing && _displayOffSupported && _migrationDone && _setup.IsReady && _session.CanStartSession && _session.TryBegin(automatic); }
         private void ReleaseIdlePowerRequest()
         {
             if (_session.IsBusy) return;
@@ -357,7 +357,7 @@ namespace ScreenOffTray
         }
         private void TurnOffDisplaysNow()
         {
-            if (_session.IsBusy || _exiting || _hotkeyEditing) return;
+            if (_session.IsBusy || _exiting || _hotkeyEditing || _updateApplying) return;
             if (!_displayOffSupported) { MessageBox.Show(LocalizeSession(_displayOffUnavailableReason), _text.Title, MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
             _lastPhysicalInputVersion = _session.PhysicalInputVersion;
             CompleteManualRequest(_manualOff.Begin(_migrationDone && _setup.IsReady && !_hotkeyEditing,
@@ -511,9 +511,10 @@ namespace ScreenOffTray
         }
         private void ExitApplication()
         {
+            if(_updateApplying && !_updateHandedOff)return;
             if (_exiting) { _session.RetryExit(); return; }
             OledPrototype.Program.Log("tray_exit_requested; setup_preparing=" + _setup.Preparing + "; session_busy=" + _session.IsBusy);
-            _exiting = true; _manualOff.Cancel(); _timer.Stop(); CancelUpdateCheck();
+            _exiting = true; _manualOff.Cancel(); _timer.Stop(); CancelUpdateCheck();StopUpdateTransfer();
             QueueExitPromptHistory();
             // Cancellation/restoration must start before any settings IO wait.
             _session.RequestEnd(true);
@@ -587,10 +588,10 @@ namespace ScreenOffTray
 
         private async void CheckForUpdates(bool automatic)
         {
-            if (_exiting || _updateChecking || (automatic && !_autoUpdatesEnabled)) return;
+            if (_exiting || _updateChecking || _downloadCancellation!=null || _updatePackage!=null || _updateApplying || (automatic && !_autoUpdatesEnabled)) return;
             var cancellation = new System.Threading.CancellationTokenSource();
             _updateCancellation = cancellation; _updateChecking = true; _automaticUpdateCheck = automatic;
-            _updateResult = null; _pendingUpdateNotice = false; RefreshUpdatePanel();
+            _updateResult = null; _updatePhase="";_downloadError=null;_pendingUpdateNotice = false; RefreshUpdatePanel();
             try {
                 var result = await _updates.CheckAsync(cancellation.Token);
                 if (_exiting || cancellation.IsCancellationRequested || _updateCancellation != cancellation) return;

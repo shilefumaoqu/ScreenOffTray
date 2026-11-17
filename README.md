@@ -2,7 +2,7 @@
 
 # ScreenOffTray
 
-[English](README_EN.md) · [下载 Windows 安装包](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.5) · [反馈问题](https://github.com/shilefumaoqu/ScreenOffTray/issues)
+[English](README_EN.md) · [下载 Windows 安装包](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.6) · [反馈问题](https://github.com/shilefumaoqu/ScreenOffTray/issues)
 
 **关掉显示器，让程序继续运行。**
 
@@ -50,16 +50,16 @@ ScreenOffTray 是一款 Windows 托盘工具：离开时按快捷键关屏，或
 
 ![同一真实设置窗口的桌面毛玻璃实拍](docs/images/glass/blue.png)
 
-主题命名与 Pane 保持同一组“跟随系统／浅色／深色”；暖白等参考手册测试背景不再作为产品主题。更新检查发现稳定版本时，按钮会改为“下载安装包”，打开对应的 GitHub 安装包下载；程序仍不会自动安装或退出。
+主题命名与 Pane 保持同一组“跟随系统／浅色／深色”；暖白等参考手册测试背景不再作为产品主题。0.2.6 起，发现稳定版本后可在软件内下载，查看进度、取消或重试。校验安装包后，点击“保存并重启更新”才会保存当前设置、正常退出并请求 Windows 安装权限；自动检查只提示，不会自行下载或安装。
 
 ## 安装与开始使用
 
-1. 从 [v0.2.4 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.5) 下载 `ScreenOffTray-0.2.5-Setup-x64.exe`，运行安装程序并完成 Windows 管理员确认。安装包可离线使用，不下载 .NET 运行时。
+1. 从 [v0.2.6 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.6) 下载 `ScreenOffTray-0.2.6-Setup-x64.exe`，运行安装程序并完成 Windows 管理员确认。安装包可离线使用，不下载 .NET 运行时。
 2. 首次配置时，在设置窗口的准备区选择「自动准备并启用关屏」。准备过程可能闪屏；请不要同时修改 Windows 显示设置。无法安全匹配时，关屏保持停用并显示原因。
 3. 从托盘右键打开设置，调整时间、快捷键和语言。普通设置点击「保存」才生效；关闭窗口或「取消」放弃普通草稿。设置窗口打开期间暂缓关屏。
 4. 需要立即关屏时，使用 `Ctrl+Alt+F10` 或托盘菜单中的「立即关屏」。关闭设置窗口后，后台继续运行；要退出程序，请使用托盘菜单的「退出」。
 
-升级前先从托盘正常退出旧版；安装器不会强杀程序，并保留已有设置。日常运行不要求管理员权限。安装器和主程序目前没有应用代码签名；驱动保留上游签名。
+从 0.2.5 及更早版本升级到本版，需要先手动下载一次安装包，从托盘正常退出旧版后安装。0.2.6 自带应用内更新器，供后续版本使用。升级保留已有设置，安装器不会强杀程序。日常运行不要求管理员权限。安装器和主程序目前没有应用代码签名；驱动保留上游签名。
 
 ## 播放保护与边界
 
@@ -77,7 +77,7 @@ ScreenOffTray 是一款 Windows 托盘工具：离开时按快捷键关屏，或
 
 ## 更新、开发与许可
 
-设置中可以检查更新；自动检查默认开启，只提示稳定版本下载入口，不会自动安装或退出程序。旧版安装包保留在 [Releases](https://github.com/shilefumaoqu/ScreenOffTray/releases)。
+在“关于”页检查更新，选择“下载更新”，完成后点击“保存并重启更新”。下载要求同一官方 Release 的精确安装包名称、HTTPS 地址、长度与 SHA256；缺少校验信息时仅提供手动下载。自动检查默认开启，只作提示。若安全退出超时或安装未完成，会说明恢复步骤；不会强杀进程、自动重启 Windows 或通过更新入口安装驱动。旧版安装包保留在 [Releases](https://github.com/shilefumaoqu/ScreenOffTray/releases)。
 
 项目使用 .NET Framework 4.8 / C# 5，后台采用 WinForms，设置窗口为独立 WPF 进程。构建方法见 [构建与验证](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/docs/构建与验证.md)，本版检查见 [版本验证](https://github.com/shilefumaoqu/ScreenOffTray/blob/main/docs/版本验证.md)。
 

@@ -13,6 +13,8 @@
 - `tests/WpfSettingsProbe.ps1 -CompileOnly`：仅编译隔离 WPF 测试程序。
 - `tests/WpfBackdropCapture.cs`：真实桌面的双背景玻璃实拍宿主。会显示临时置顶测试窗口，仅在用户允许、桌面空闲时运行；使用假后台，不执行正式关屏或写设置。编译与运行边界见 [原生玻璃验证](../docs/原生玻璃验证.md)，不能用私有桌面离屏截图替代。
 - `tests/InstallerReleaseVersionTests.ps1`：安装器版本门禁的纯文本/数值检查。
+- `tests/InAppUpdateTests.ps1`：54 项下载/信任边界检查与 11 项更新控制器检查，使用假 HTTP、设置和安装协作者；不执行真实安装。可加 `-Live` 只读查询并下载官方安装包，核对后删除，不运行它。
+- `$env:SCREENOFF_UPDATE_FIXTURE='1'; ./tests/WpfSettingsProbe.ps1 -PipeFixture -Runs 1`：真实设置 UI 与假后台交换下载、取消、重试和保存草稿后更新命令。窗口在私有非输入桌面，不操作正式程序。
 
 其他驱动准备、资源观察与原型脚本按需使用，执行前阅读脚本及文档中的验证边界。它们不是默认回归入口，不能批量运行所有脚本。
 
