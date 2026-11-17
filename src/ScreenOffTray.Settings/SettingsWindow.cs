@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using ScreenOffTray.Playback;
 using ScreenOffTray.SettingsTransport;
@@ -38,6 +39,9 @@ namespace ScreenOffTray.SettingsUi
         private string migrationKey,listKey,sourcesKey,backgroundMode="system";
         private PlayingSource[] currentSources=new PlayingSource[0];
         private string[] appliedWhitelist=new string[0];
+        private HwndSource backdropSource;
+        // API attachment is distinct from visual acceptance (e.g. private desktops).
+        internal bool UsesDesktopBackdrop {get;private set;}
 
         internal event Action<int> MigrationRequested;
         internal event Action DisplaySettingsRequested;
@@ -84,7 +88,7 @@ namespace ScreenOffTray.SettingsUi
             EnglishChoice.Click+=OnLanguageChoice;
             ProtectionLimitSwitch.Checked+=delegate{ProtectionMinutesInput.IsEnabled=true;};
             ProtectionLimitSwitch.Unchecked+=delegate{ProtectionMinutesInput.IsEnabled=false;};
-            SizeChanged+=delegate{ApplyResponsiveLayout();};
+            SizeChanged+=delegate{ApplyResponsiveLayout();ClipBackdrop();};
             ApplyBackground(backgroundMode);
             SetSources(new PlayingSource[0],true);
             ApplyBusy();
@@ -93,6 +97,29 @@ namespace ScreenOffTray.SettingsUi
 
         private string T(string zh,string en){return english?en:zh;}
 
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            backdropSource=HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+            backdropSource.AddHook(OnBackdropMessage);
+            ApplyBackground(backgroundMode);
+            ClipBackdrop();
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            if(backdropSource!=null){backdropSource.RemoveHook(OnBackdropMessage);backdropSource=null;}
+            base.OnClosed(e);
+        }
+        private IntPtr OnBackdropMessage(IntPtr hwnd,int message,IntPtr wParam,IntPtr lParam,ref bool handled)
+        {
+            if(message==0x31E || message==0x31A || message==0x1A)ApplyBackground(backgroundMode);
+            // The WPF handler updates HWND bounds after this hook returns.
+            if(message==0x2E0)Dispatcher.BeginInvoke(new Action(ClipBackdrop),System.Windows.Threading.DispatcherPriority.Loaded);
+            return IntPtr.Zero;
+        }
+        private void ClipBackdrop(){if(backdropSource!=null)NativeBackdrop.Clip(backdropSource.Handle,Shell.CornerRadius.TopLeft);}
+
         private void LocalizeStaticTexts(DependencyObject root)
         {
             var text=root as TextBlock;
@@ -100,7 +127,7 @@ namespace ScreenOffTray.SettingsUi
             {
                 string value;
                 if(StaticTranslations.TryGetValue(text.Text,out value))text.Text=value;
-                else if(text.Text=="版本 0.2.3 · Windows x64")text.Text="Version 0.2.3 · Windows x64";
+                else if(text.Text=="版本 0.2.4 · Windows x64")text.Text="Version 0.2.4 · Windows x64";
             }
             var control=root as ContentControl;
             if(control!=null && control.Content is string)
@@ -426,21 +453,23 @@ namespace ScreenOffTray.SettingsUi
         {
             backgroundMode=NormalizeTheme(mode);
             bool dark=backgroundMode=="dark" || (backgroundMode=="system" && IsSystemDark());
+            UsesDesktopBackdrop=backdropSource!=null && NativeBackdrop.Apply(backdropSource.Handle,dark,SystemParameters.HighContrast);
+            if(backdropSource!=null)backdropSource.CompositionTarget.BackgroundColor=UsesDesktopBackdrop?Colors.Transparent:ParseColor(dark?"#FF161619":"#FFF9F9FA");
             Stage.Background=Brushes.Transparent;
             SystemChoice.IsChecked=backgroundMode=="system";LightChoice.IsChecked=backgroundMode=="light";DarkChoice.IsChecked=backgroundMode=="dark";
             if(dark)
             {
-                Resources["Text1"]=MakeBrush("#F2FFFFFF");Resources["Text2"]=MakeBrush("#A6FFFFFF");Resources["Text3"]=MakeBrush("#70FFFFFF");
-                Resources["Stroke"]=MakeBrush("#18FFFFFF");Resources["FillControl"]=MakeBrush("#20FFFFFF");Resources["FillHover"]=MakeBrush("#18FFFFFF");
-                Resources["FillSelected"]=MakeBrush("#20FFFFFF");Resources["WarningSurface"]=MakeBrush("#2AF5A524");Resources["DangerSurface"]=MakeBrush("#28E5484D");Resources["SuccessSurface"]=MakeBrush("#2035B880");
-                Shell.Background=MakeGradient("#FF1C1C20","#FF161619");SidebarSurface.Background=MakeBrush("#FF202126");FooterBar.Background=MakeBrush("#FF18191D");Shell.BorderBrush=MakeBrush("#22FFFFFF");
+                Resources["Text1"]=MakeBrush("#F0FFFFFF");Resources["Text2"]=MakeBrush("#A3FFFFFF");Resources["Text3"]=MakeBrush("#66FFFFFF");
+                Resources["Stroke"]=MakeBrush("#14FFFFFF");Resources["FillControl"]=MakeBrush("#12FFFFFF");Resources["FillHover"]=MakeBrush("#10FFFFFF");
+                Resources["FillSelected"]=MakeBrush("#1FFFFFFF");Resources["WarningSurface"]=MakeBrush("#2AF5A524");Resources["DangerSurface"]=MakeBrush("#28E5484D");Resources["SuccessSurface"]=MakeBrush("#2035B880");
+                Shell.Background=MakeGradient(UsesDesktopBackdrop?"#001C1C20":"#FF1C1C20",UsesDesktopBackdrop?"#00161619":"#FF161619");SidebarSurface.Background=MakeBrush(UsesDesktopBackdrop?"#18202126":"#FF202126");FooterBar.Background=MakeBrush(UsesDesktopBackdrop?"#2818191D":"#FF18191D");Shell.BorderBrush=MakeEdgeBrush(true);
             }
             else
             {
                 Resources["Text1"]=MakeBrush("#EB141418");Resources["Text2"]=MakeBrush("#9E141418");Resources["Text3"]=MakeBrush("#6B141418");
-                Resources["Stroke"]=MakeBrush("#14000000");Resources["FillControl"]=MakeBrush("#DFFFFFFF");Resources["FillHover"]=MakeBrush("#0C000000");
-                Resources["FillSelected"]=MakeBrush("#CFFFFFFF");Resources["WarningSurface"]=MakeBrush("#FFF8E8");Resources["DangerSurface"]=MakeBrush("#FFF0F0");Resources["SuccessSurface"]=MakeBrush("#EEF9F2");
-                Shell.Background=MakeGradient("#FFF6F6F8","#FFE7ECF2");SidebarSurface.Background=MakeBrush("#FFEDF0F3");FooterBar.Background=MakeBrush("#FFF4F5F7");Shell.BorderBrush=MakeBrush("#24000000");
+                Resources["Stroke"]=MakeBrush("#14000000");Resources["FillControl"]=MakeBrush("#80FFFFFF");Resources["FillHover"]=MakeBrush("#0C000000");
+                Resources["FillSelected"]=MakeBrush("#9EFFFFFF");Resources["WarningSurface"]=MakeBrush("#FFF8E8");Resources["DangerSurface"]=MakeBrush("#FFF0F0");Resources["SuccessSurface"]=MakeBrush("#EEF9F2");
+                Shell.Background=MakeGradient(UsesDesktopBackdrop?"#00F6F6F8":"#FFF6F6F8",UsesDesktopBackdrop?"#00F1F1F5":"#FFF1F1F5");SidebarSurface.Background=MakeBrush(UsesDesktopBackdrop?"#18EDF0F3":"#FFEDF0F3");FooterBar.Background=MakeBrush(UsesDesktopBackdrop?"#28F4F5F7":"#FFF4F5F7");Shell.BorderBrush=MakeEdgeBrush(false);
             }
         }
 
@@ -472,6 +501,15 @@ namespace ScreenOffTray.SettingsUi
         private static LinearGradientBrush MakeGradient(string from,string to)
         {
             var brush=new LinearGradientBrush(ParseColor(from),ParseColor(to),90);brush.Freeze();return brush;
+        }
+        private static LinearGradientBrush MakeEdgeBrush(bool dark)
+        {
+            var brush=new LinearGradientBrush{StartPoint=new Point(.5,0),EndPoint=new Point(.5,1)};
+            brush.GradientStops.Add(new GradientStop(ParseColor(dark?"#27FFFFFF":"#86FFFFFF"),0));
+            brush.GradientStops.Add(new GradientStop(ParseColor(dark?"#18FFFFFF":"#28FFFFFF"),.3));
+            brush.GradientStops.Add(new GradientStop(ParseColor(dark?"#12FFFFFF":"#0DFFFFFF"),.7));
+            brush.GradientStops.Add(new GradientStop(ParseColor(dark?"#1AFFFFFF":"#3CFFFFFF"),1));
+            brush.Freeze();return brush;
         }
         private static T FindAncestor<T>(DependencyObject value) where T:DependencyObject
         {

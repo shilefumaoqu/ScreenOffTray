@@ -2,7 +2,7 @@
 
 # ScreenOffTray
 
-[简体中文](README.md) · [Download for Windows](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.3) · [Report an issue](https://github.com/shilefumaoqu/ScreenOffTray/issues)
+[简体中文](README.md) · [Download for Windows](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.4) · [Report an issue](https://github.com/shilefumaoqu/ScreenOffTray/issues)
 
 **Turn off the display while your applications keep running.**
 
@@ -46,11 +46,15 @@ Mouse movement, scrolling and input marked as injected by Windows do not wake it
 
 Choose Use system theme, Light or Dark under About. Simplified Chinese and English are available. Appearance changes are saved with ordinary settings.
 
+Version 0.2.4 adds real desktop Acrylic: the window takes on background color, softens underlying text, and keeps its own text clear. This is a desktop photograph of the actual Light Settings window over a separate blue background; see the [second background and validation limits](docs/原生玻璃验证.md). Unsupported systems, disabled transparency and high contrast use a solid fallback.
+
+![Actual desktop Acrylic Settings window](docs/images/glass/blue.png)
+
 The theme choices use Pane's System / Light / Dark naming. Reference-manual test backgrounds such as Warm white are no longer product themes. When a stable update is available, the button changes to Download installer and opens that GitHub installer asset; the app still never installs automatically or exits.
 
 ## Install and get started
 
-1. Download `ScreenOffTray-0.2.3-Setup-x64.exe` from [v0.2.3 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.3), run it and approve the Windows administrator prompt. Setup works offline and does not download the .NET runtime.
+1. Download `ScreenOffTray-0.2.4-Setup-x64.exe` from [v0.2.4 Release](https://github.com/shilefumaoqu/ScreenOffTray/releases/tag/v0.2.4), run it and approve the Windows administrator prompt. Setup works offline and does not download the .NET runtime.
 2. During first-time setup, choose “Prepare and enable display off” in Settings. The display may flicker; avoid changing Windows display settings during preparation. If safe matching fails, display-off stays disabled and a reason is shown.
 3. Open Settings from the tray menu to adjust the timeout, shortcut and language. Save applies ordinary drafts; Cancel or closing the window discards them. Display-off is deferred while Settings is open.
 4. Press `Ctrl+Alt+F10` or choose “Turn off now” in the tray menu. Closing Settings leaves the background app running; use “Exit” in the tray menu to quit it.

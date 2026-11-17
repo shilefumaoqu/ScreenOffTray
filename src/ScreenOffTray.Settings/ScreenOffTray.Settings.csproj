@@ -25,7 +25,7 @@
     <Reference Include="PresentationFramework"/><Reference Include="System.Xaml"/>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Program.cs"/><Compile Include="SettingsClient.cs"/>
+    <Compile Include="Program.cs"/><Compile Include="SettingsClient.cs"/><Compile Include="NativeBackdrop.cs"/>
     <Compile Include="SettingsWindow.cs"><DependentUpon>SettingsWindow.xaml</DependentUpon></Compile><Compile Include="WindowSizingPolicy.cs"/><Compile Include="ApplicationIcons.cs"/>
     <Compile Include="..\Shared\SettingsWire.cs"/><Compile Include="..\Shared\HotkeyBinding.cs"/>
     <Compile Include="..\Shared\AudioSourceNames.cs"/>

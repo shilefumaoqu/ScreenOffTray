@@ -1,3 +1,14 @@
+# ScreenOffTray 0.2.4
+
+设置窗口接入真正的 Windows Desktop Acrylic 背景模糊，替代接近实色的表面。保持同一浅色窗口，在外部蓝、橙背景上完成真实桌面实拍：色调随背景变化，背后的文字和黑白纹理明显柔化，窗口自己的文字保持清楚。保留跟随系统／浅色／深色、Pane 风格控件与高光，不包含参考壁纸。系统不支持原生材质、关闭透明效果或高对比度时明确回退实色，不将其算作玻璃通过。
+
+79 项隔离检查通过，并补齐 DPI 裁切时序与窗口关闭处理。驱动、显示准备、关屏、输入恢复、播放保护、快捷键和设置格式未改。应用更新仍是打开可信 Setup 下载，不自动覆盖安装。本机未安装该候选。实拍和验证边界见 [原生玻璃验证](docs/原生玻璃验证.md)。原生 Acrylic 参数由 Windows 决定，与 Pane 自定义合成并非逐像素一致；深色双背景、跨 DPI 实机与 Windows 10 回退呈现尚未实机复验。历史版本保持独立。
+
+Settings now uses real Windows Desktop Acrylic blur instead of a near-opaque surface. The same Light window was moved across separate blue and orange desktop backgrounds: tint changes, underlying text and black/white edges soften, and foreground text remains clear. System / Light / Dark, Pane-inspired controls and highlights remain; no reference wallpaper is included. Unsupported systems, disabled transparency and high contrast use an explicitly solid fallback, which is not counted as glass acceptance.
+
+Seventy-nine isolated checks passed, including deferred DPI clipping. Drivers, display preparation, display-off, input recovery, playback protection, hotkeys and settings formats are unchanged. Updating opens a trusted Setup download and never installs automatically. This candidate was not installed on the build machine. See [validation scope](docs/原生玻璃验证.md) for actual photographs and limitations. Windows controls the Acrylic parameters; this is not pixel-identical to Pane's custom compositor. Dark dual-background, real cross-DPI and Windows 10 fallback presentation remain unverified. Previous releases stay independent.
+
+---
 # ScreenOffTray 0.2.3
 
 本版修复两个设置问题。发现稳定新版本后，“检查更新”按钮会明确变为“下载安装包”，优先打开同一 GitHub Release 中名称和 URL 均已核验的 Setup；仍不会自动下载、安装或退出。外观改为 Pane 的“跟随系统／浅色／深色”，暖白不再作为产品主题；旧 `geometry`、`warm` 自动迁移为浅色，旧 `black` 迁移为深色。驱动、显示准备、关屏、输入恢复、播放保护和快捷键规则未修改。`v0.2.2`、`v0.2.1`、`v0.2.0` 与历史安装包保持独立。
