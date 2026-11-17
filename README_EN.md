@@ -46,6 +46,10 @@ Mouse movement, scrolling and input marked as injected by Windows do not wake it
 
 Choose Use system theme, Light or Dark under About. Simplified Chinese and English are available. Appearance changes are saved with ordinary settings.
 
+Version 0.2.4 adds real desktop Acrylic: the window takes on background color, softens underlying text, and keeps its own text clear. This is a desktop photograph of the actual Light Settings window over a separate blue background; see the [second background and validation limits](docs/原生玻璃验证.md). Unsupported systems, disabled transparency and high contrast use a solid fallback.
+
+![Actual desktop Acrylic Settings window](docs/images/glass/blue.png)
+
 The theme choices use Pane's System / Light / Dark naming. Reference-manual test backgrounds such as Warm white are no longer product themes. When a stable update is available, the button changes to Download installer and opens that GitHub installer asset; the app still never installs automatically or exits.
 
 ## Install and get started

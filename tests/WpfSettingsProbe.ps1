@@ -30,6 +30,7 @@ if($StageTimings){
  $generated=Join-Path $output 'Program.stage.cs';[IO.File]::WriteAllText($generated,$program,[Text.UTF8Encoding]::new($true));$fixtureSources[0]=$generated
 }
 $binary=Join-Path $output 'WpfSettingsProbe.exe'
+$fixtureSources+=(Join-Path $root 'src/ScreenOffTray.Settings/NativeBackdrop.cs')
 & (Join-Path $framework 'csc.exe') /nologo /utf8output /target:exe /platform:x64 /langversion:5 /optimize+ /codepage:65001 $fixtureMain ('/out:'+$binary) ('/win32manifest:'+(Join-Path $root 'src/ScreenOffTray.Settings/app.manifest')) $refs $resources $fixtureSources $generatedCode (Join-Path $root 'src/ScreenOffTray.Settings/SettingsWindow.cs') (Join-Path $root 'src/ScreenOffTray.Settings/WindowSizingPolicy.cs') (Join-Path $root 'src/ScreenOffTray.Settings/ApplicationIcons.cs') (Join-Path $root 'src/ScreenOffTray.Settings/ApplicationIconCache.cs') (Join-Path $root 'src/Shared/AudioSourceNames.cs') (Join-Path $root 'src/Shared/HotkeyBinding.cs') (Join-Path $root 'src/Shared/SettingsWire.cs') (Join-Path $PSScriptRoot $(if($PipeFixture){'WpfPipeFixture.cs'}elseif($LayoutTests){'WpfSettingsLayoutTests.cs'}elseif($ResizeDiagnostic){'WpfResizeDiagnostic.cs'}else{'WpfSettingsProbe.cs'})) 2>&1|Tee-Object (Join-Path $output 'compile.txt')
 if($LASTEXITCODE -ne 0){throw 'WPF compile failed'}
 Copy-Item -LiteralPath (Join-Path $root 'src/ScreenOffTray.Settings/App.config') -Destination ($binary+'.config')

@@ -11,6 +11,7 @@
 - `tests/StartupTests.ps1`：初始化确认协议，使用假启动器。
 - `tests/WpfSettingsProbe.ps1 -LayoutTests -Runs 1`：正式 WPF 控件、私有非输入桌面、假后台。
 - `tests/WpfSettingsProbe.ps1 -CompileOnly`：仅编译隔离 WPF 测试程序。
+- `tests/WpfBackdropCapture.cs`：真实桌面的双背景玻璃实拍宿主。会显示临时置顶测试窗口，仅在用户允许、桌面空闲时运行；使用假后台，不执行正式关屏或写设置。编译与运行边界见 [原生玻璃验证](../docs/原生玻璃验证.md)，不能用私有桌面离屏截图替代。
 - `tests/InstallerReleaseVersionTests.ps1`：安装器版本门禁的纯文本/数值检查。
 
 其他驱动准备、资源观察与原型脚本按需使用，执行前阅读脚本及文档中的验证边界。它们不是默认回归入口，不能批量运行所有脚本。

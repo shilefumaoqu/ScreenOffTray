@@ -2,8 +2,10 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -51,7 +53,7 @@ internal static class WpfSettingsLayoutTests
                 Check(Math.Abs(window.Width/window.Height-1.4)<0.001,tag+" preserves the 7:5 window ratio");
                 Check(window.ActualWidth>0 && window.ActualHeight>0,tag+" has a visible native work area");
                 Check(Field<Border>(window,"Shell").Margin==new Thickness(0),tag+" uses the glass shell as the window boundary without a display backdrop");
-                Check(((SolidColorBrush)Field<Border>(window,"FooterBar").Background).Color.A==255,tag+" keeps the footer surface opaque to prevent transparent-window ghosting");
+                Check(!window.AllowsTransparency,tag+" uses a compositor-compatible HWND rather than a layered transparent window");
                 Check(Field<ComboBox>(window,"WhitelistCombo").Items.Count==10,tag+" renders all ten allowlist entries");
                 Check(Field<Border>(window,"FooterBar").ActualHeight>0,tag+" keeps a fixed footer");
                 Check(Field<Button>(window,"SaveButton").IsVisible && Field<Button>(window,"CancelButton").IsVisible,tag+" keeps save and cancel visible");
@@ -75,10 +77,10 @@ internal static class WpfSettingsLayoutTests
                     var fill=((SolidColorBrush)window.FindResource("FillControl"));
                     if(theme=="light") {
                         Check(fill.Color.A==0x80,tag+" uses Pane's translucent light control fill");
-                        Check(shellBrush.GradientStops[0].Color.A==0xFC && shellBrush.GradientStops[1].Color.A==0xFC,tag+" uses Pane's light glass tint with a readable fallback");
+                        Check(shellBrush.GradientStops.All(s=>s.Color.A==(window.UsesDesktopBackdrop?0:255)),tag+" exposes native light blur or an explicitly solid fallback without a near-solid imitation");
                     } else if(theme=="dark") {
                         Check(fill.Color.A==0x12,tag+" uses Pane's translucent dark control fill");
-                        Check(shellBrush.GradientStops[0].Color.A==0xFC && shellBrush.GradientStops[1].Color.A==0xFC,tag+" uses Pane's dark glass tint with a readable fallback");
+                        Check(shellBrush.GradientStops.All(s=>s.Color.A==(window.UsesDesktopBackdrop?0:255)),tag+" exposes native dark blur or an explicitly solid fallback without a near-solid imitation");
                     }
                     if(theme!="system") {
                         var edge=((LinearGradientBrush)Field<Border>(window,"Shell").BorderBrush).GradientStops;
@@ -93,6 +95,21 @@ internal static class WpfSettingsLayoutTests
                 }
                 Check(lightShell!=darkShell,tag+" uses distinct light and dark top-level colors");
                 Check(systemShell==lightShell || systemShell==darkShell,tag+" resolves system appearance to light or dark");
+                var hwnd=new WindowInteropHelper(window).Handle;
+                IntPtr marker=CreateRectRgn(0,0,9,9);
+                if(SetWindowRgn(hwnd,marker,false)==0){DeleteObject(marker);throw new Exception("Test region attachment failed");}
+                object[] dpiMessage={hwnd,0x2E0,IntPtr.Zero,IntPtr.Zero,false};
+                window.GetType().GetMethod("OnBackdropMessage",Fields).Invoke(window,dpiMessage);
+                Check(RegionWidth(hwnd)==9,tag+" defers DPI clipping until WPF has processed the native message");
+                await window.Dispatcher.InvokeAsync(delegate{},DispatcherPriority.ApplicationIdle);
+                Check(RegionWidth(hwnd)>9,tag+" rebuilds the rounded native region after the DPI handler completes");
+                Check(!NativeBackdrop.Apply(hwnd,false,true),tag+" disables native material for the high-contrast path without changing system settings");
+                int nativeMode;int result=DwmGetWindowAttribute(hwnd,38,out nativeMode,4);
+                Check(result<0 || nativeMode==1,tag+" requests no system backdrop on the accessible fallback path");
+                window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"light");
+                result=DwmGetWindowAttribute(hwnd,38,out nativeMode,4);
+                Check(!window.UsesDesktopBackdrop || (result>=0 && nativeMode==3),tag+" attaches Desktop Acrylic when supported; actual blur requires desktop photographs");
+                Check(((SolidColorBrush)Field<Border>(window,"FooterBar").Background).Color.A==(window.UsesDesktopBackdrop?0x28:0xFF),tag+" keeps footer paint on the same native material, with an opaque unsupported fallback");
                 Check(window.FindName("WarmChoice")==null && window.FindName("BlackChoice")==null,tag+" removes the reference test background from product theme choices");
                 Check(Field<RadioButton>(window,"SystemChoice").Content.ToString()==(english?"Use system theme":"跟随系统") && Field<RadioButton>(window,"LightChoice").Content.ToString()==(english?"Light":"浅色") && Field<RadioButton>(window,"DarkChoice").Content.ToString()==(english?"Dark":"深色"),tag+" labels the same system, light and dark theme choices as Pane");
                 window.SetValues(3,"Ctrl+Alt+F10",english?"en":"zh-CN",true,true,true,87,"geometry");Check(window.InterfaceTheme=="light",tag+" migrates legacy geometry theme to light");
@@ -128,6 +145,19 @@ internal static class WpfSettingsLayoutTests
             if(window!=null)window.Close();
             Application.Current.Shutdown(exitCode);
         }
+    }
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr window,int attribute,out int value,int size);
+    [StructLayout(LayoutKind.Sequential)] private struct NativeRect {internal int Left,Top,Right,Bottom;}
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int left,int top,int right,int bottom);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr region);
+    [DllImport("gdi32.dll")] private static extern int GetRgnBox(IntPtr region,out NativeRect bounds);
+    [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr window,IntPtr region,bool redraw);
+    [DllImport("user32.dll")] private static extern int GetWindowRgn(IntPtr window,IntPtr region);
+    private static int RegionWidth(IntPtr window)
+    {
+        IntPtr region=CreateRectRgn(0,0,0,0);
+        try {NativeRect rect;if(GetWindowRgn(window,region)==0 || GetRgnBox(region,out rect)==0)throw new Exception("Test window has no native region");return rect.Right-rect.Left;}
+        finally {DeleteObject(region);}
     }
     private static void ShowPage(SettingsWindow window,string page)
     {
