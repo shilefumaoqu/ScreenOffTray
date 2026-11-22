@@ -1,5 +1,5 @@
 ﻿#requires -Version 7.0
-param([string]$OutputDirectory='', [switch]$CompileOnly)
+param([string]$OutputDirectory='', [switch]$CompileOnly, [string]$MediaDll='')
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 if(!$OutputDirectory){$OutputDirectory=Join-Path $root 'checks/optimization-01911/resource-build'}
@@ -95,7 +95,12 @@ $references=@($project.SelectNodes("//*[local-name()='Reference']")|ForEach-Obje
 $resources=@($project.SelectNodes("//*[local-name()='EmbeddedResource']")|ForEach-Object{'/resource:'+(Join-Path (Join-Path $root 'src/ScreenOffTray') $_.Include)+','+$_.LogicalName})
 $binary=Join-Path $OutputDirectory 'ScreenOffMemoryIsolation.exe'
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$log=& $compiler /nologo /utf8output /target:exe /platform:x64 /optimize+ /langversion:5 /codepage:65001 /main:ScreenOffTray.Tests.OptimizationIsolationProbe ('/out:'+$binary) $references ('/win32manifest:'+(Join-Path $root 'src/ScreenOffTray/app.manifest')) $resources $sources 2>&1
+$mediaOptions=@()
+if($MediaDll){
+ Copy-Item -LiteralPath $MediaDll -Destination (Join-Path $OutputDirectory 'screenoff_media.dll')
+ $mediaOptions+= '/define:MEDIA_CANDIDATE_PROBE'
+}
+$log=& $compiler @mediaOptions /nologo /utf8output /target:exe /platform:x64 /optimize+ /langversion:5 /codepage:65001 /main:ScreenOffTray.Tests.OptimizationIsolationProbe ('/out:'+$binary) $references ('/win32manifest:'+(Join-Path $root 'src/ScreenOffTray/app.manifest')) $resources $sources 2>&1
 [IO.File]::WriteAllLines((Join-Path $OutputDirectory 'compile.txt'),[string[]]@($log|ForEach-Object{$_.ToString()}),$utf8)
 if($LASTEXITCODE){throw "Diagnostic build failed: $log"}
 if(!$CompileOnly){

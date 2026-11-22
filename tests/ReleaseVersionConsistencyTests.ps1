@@ -1,3 +1,4 @@
+param([switch]$Candidate)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 function Read-Text([string]$relative) {
@@ -30,9 +31,10 @@ $helpPath = $helpFiles[0].FullName
 $help = Get-Content -LiteralPath $helpPath -Raw -Encoding UTF8
 Expect $help ('ScreenOffTray '+[regex]::Escape($version)+'</h1>') 'Chinese help title'
 Expect $help ('Version '+[regex]::Escape($version)+' targets Windows') 'English help title'
-foreach ($relative in @('README.md','README_EN.md')) {
+if (!$Candidate) { foreach ($relative in @('README.md','README_EN.md')) {
     $readme = Read-Text $relative
     Expect $readme ('releases/tag/v'+[regex]::Escape($version)) ($relative + ' release link')
     Expect $readme ('ScreenOffTray-'+[regex]::Escape($version)+'-Setup-x64\.exe') ($relative + ' installer name')
 }
-Write-Output ('PASS release '+$version+' is consistent across assembly, manifest, settings, help, installer, builder and bilingual README files')
+}
+Write-Output ('PASS release '+$version+' is consistent across assembly, manifest, settings, help, installer, builder (README links checked for published releases)')

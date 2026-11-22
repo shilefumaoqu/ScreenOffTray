@@ -1,13 +1,16 @@
-﻿; Compile only with pinned Inno Setup 7.1.0. Main build supplies /DSourceRoot=<allowlisted payload>.
+; Compile only with pinned Inno Setup 7.1.0. Main build supplies /DSourceRoot=<allowlisted payload>.
 #ifndef SourceRoot
   #define SourceRoot AddBackslash(SourcePath) + "..\打包暂存\payload"
 #endif
 
 #ifndef ReleaseVersion
-#define ReleaseVersion "0.2.6"
+#define ReleaseVersion "0.2.7"
 #endif
 #ifndef RollbackOnly
 #define RollbackOnly "0"
+#endif
+#ifndef ExpectedMediaHash
+#error Missing verified media DLL hash
 #endif
 #ifndef VerifierFile
 #define VerifierFile AddBackslash(SourceRoot) + "ScreenOffTray.DriverSetup.exe"
@@ -77,9 +80,13 @@ Source: "{#SourceRoot}\ScreenOffTray.Settings.exe"; DestDir: "{app}"; Flags: ign
 Source: "{#SourceRoot}\ScreenOffTray.Settings.exe.config"; DestDir: "{app}"; Flags: ignoreversion
 #endif
 Source: "{#SourceRoot}\ScreenOffTray.DriverSetup.exe"; DestDir: "{app}"; Flags: ignoreversion
+#if RollbackOnly == "0"
+Source: "{#SourceRoot}\screenoff_media.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceRoot}\Licenses\Rust-ThirdParty.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
 Source: "{#SourceRoot}\Driver\MttVDD.inf"; DestDir: "{app}\Driver"; Flags: ignoreversion; Check: IsFreshInstall
 Source: "{#SourceRoot}\Driver\MttVDD.dll"; DestDir: "{app}\Driver"; Flags: ignoreversion; Check: IsFreshInstall
 Source: "{#SourceRoot}\Driver\mttvdd.cat"; DestDir: "{app}\Driver"; Flags: ignoreversion; Check: IsFreshInstall
+#endif
 Source: "{#SourceRoot}\帮助.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\配置模板\默认设置说明.json"; DestDir: "{app}\配置模板"; Flags: ignoreversion
 Source: "{#SourceRoot}\Licenses\Virtual-Display-Driver-MIT.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
@@ -99,6 +106,7 @@ Name: "{group}\使用帮助"; Filename: "{app}\帮助.html"
 var
   HelperCode: Integer;
   DriverReady: Boolean;
+  PostInstallFailed: Boolean;
   IsUpgrade: Boolean;
   ResumeFirstInstall: Boolean;
   PreviousDirectory: String;
@@ -108,20 +116,56 @@ function IsFreshInstall: Boolean;
 begin
   Result := not IsUpgrade;
 end;
-function VerifyUpgrade: String;
+#if RollbackOnly == "1"
+function ReadRollbackVersion(const Name: String; var LowVersion: Cardinal): Boolean;
+var HighVersion: Cardinal;
+begin
+  Result := False;
+  if not GetVersionNumbers(AddBackslash(WizardDirValue) + Name, HighVersion, LowVersion) then Exit;
+  Result := (HighVersion = 2) and ((LowVersion = 393216) or (LowVersion = 458752));
+end;
+
+function CanRollbackCandidate: Boolean;
+var MainVersion, SettingsVersion, HelperVersion: Cardinal;
+    MediaFile: String;
+begin
+  Result := False;
+  if not ReadRollbackVersion('ScreenOffTray.exe', MainVersion) or
+    not ReadRollbackVersion('ScreenOffTray.Settings.exe', SettingsVersion) or
+    not ReadRollbackVersion('ScreenOffTray.DriverSetup.exe', HelperVersion) then Exit;
+  Result := (MainVersion = 458752) or (SettingsVersion = 458752) or (HelperVersion = 458752);
+  if Result then Exit;
+  MediaFile := AddBackslash(WizardDirValue) + 'screenoff_media.dll';
+  try
+    if FileExists(MediaFile) then
+      Result := CompareText(GetSHA256OfFile(MediaFile), '{#ExpectedMediaHash}') = 0;
+  except
+    Log('Cannot verify media DLL from partially rolled-back candidate: ' + GetExceptionMessage);
+  end;
+end;
+#endif
+function VerifyUpgrade(AfterCopy: Boolean): String;
 var Code: Integer; VersionMS, VersionLS: Cardinal;
     VerifyMode: String;
 begin
   Result := '';
-  if ('{#RollbackOnly}' <> '1') and FileExists(AddBackslash(WizardDirValue)+'ScreenOffTray.exe') then begin
+#if RollbackOnly == "1"
+  if not AfterCopy then begin
+    if not CanRollbackCandidate then begin
+      Result := '此回退包仅适用于 0.2.7 候选版。'; Exit;
+    end;
+  end;
+#else
+  if FileExists(AddBackslash(WizardDirValue)+'ScreenOffTray.exe') then begin
     if not GetVersionNumbers(AddBackslash(WizardDirValue)+'ScreenOffTray.exe',VersionMS,VersionLS) then begin
       Result := '无法核实旧程序版本，已停止升级。'; Exit;
     end;
-    { Numeric file version 0.2.6.0; the separate rollback package explicitly permits downgrade. }
-    if (VersionMS > 2) or ((VersionMS = 2) and (VersionLS > 393216)) then begin
+    { Numeric file version 0.2.7.0; the separate rollback package explicitly permits downgrade. }
+    if (VersionMS > 2) or ((VersionMS = 2) and (VersionLS > 458752)) then begin
       Result := '已安装版本更高，请使用对应版本安装包。'; Exit;
     end;
   end;
+#endif
   if ResumeFirstInstall then VerifyMode := '--verify-first-install-pending' else VerifyMode := '--verify-existing';
   if not Exec(ExpandConstant('{tmp}\ScreenOffTray.UpgradeCheck.exe'),
     VerifyMode + ' --app-dir "' + WizardDirValue + '"', ExpandConstant('{tmp}'), SW_HIDE, ewWaitUntilTerminated, Code) then
@@ -137,13 +181,46 @@ begin
       Result := '升级必须沿用已登记的安装目录。'; Exit;
     end;
     ExtractTemporaryFile('ScreenOffTray.UpgradeCheck.exe');
-    Result := VerifyUpgrade;
+    Result := VerifyUpgrade(False);
   end else if DirExists(WizardDirValue) and
     (FileExists(AddBackslash(WizardDirValue)+'ScreenOffTray.exe') or FileExists(AddBackslash(WizardDirValue)+'ScreenOffTray.DriverSetup.exe')) then
     Result := '发现未登记的旧程序。已停止，避免误入首次驱动安装。';
+#if RollbackOnly == "0"
+  if Result = '' then begin
+    try
+      ExtractTemporaryFile('screenoff_media.dll');
+      if CompareText(GetSHA256OfFile(ExpandConstant('{tmp}\screenoff_media.dll')), '{#ExpectedMediaHash}') <> 0 then
+        Result := '安装包内的播放器读取组件校验失败，程序尚未覆盖。';
+    except
+      Result := '无法核验安装包内的播放器读取组件，程序尚未覆盖。';
+    end;
+  end;
+#endif
 end;
 
 procedure FinishLaunch; forward;
+
+function InstalledVersionMatches(const Name: String): Boolean;
+var HighVersion, LowVersion: Cardinal;
+begin
+  Result := False;
+  if not GetVersionNumbers(ExpandConstant('{app}\') + Name, HighVersion, LowVersion) then Exit;
+#if RollbackOnly == "1"
+  Result := (HighVersion = 2) and (LowVersion = 393216);
+#else
+  Result := (HighVersion = 2) and (LowVersion = 458752);
+#endif
+end;
+
+#if RollbackOnly == "0"
+procedure FailMediaCopy;
+begin
+  if IsUpgrade then
+    RaiseException('播放器读取组件校验失败。请用对应的程序回退包恢复。')
+  else
+    RaiseException('播放器读取组件校验失败，尚未启动驱动安装。请查看安装日志，卸载本次未完成的安装后重试。');
+end;
+#endif
 
 function HasNet48: Boolean;
 var
@@ -183,12 +260,41 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Started: Boolean;
+  MediaFile: String;
+#if RollbackOnly == "0"
+  MediaMatches: Boolean;
+#endif
 begin
   if CurStep = ssPostInstall then begin
     DriverReady := False;
+    PostInstallFailed := True;
+    MediaFile := ExpandConstant('{app}\screenoff_media.dll');
+#if RollbackOnly == "0"
+    MediaMatches := False;
+    try
+      if FileExists(MediaFile) then
+        MediaMatches := CompareText(GetSHA256OfFile(MediaFile), '{#ExpectedMediaHash}') = 0;
+    except
+      Log('Cannot read installed media DLL: ' + GetExceptionMessage);
+    end;
+    if not MediaMatches then FailMediaCopy;
+#endif
     if IsUpgrade and (not ResumeFirstInstall) then begin
-      if VerifyUpgrade <> '' then RaiseException('升级后核验未通过；未启动程序，未操作驱动。');
-      DriverReady := True; Exit;
+      if VerifyUpgrade(True) <> '' then RaiseException('升级后核验未通过；未启动程序，未操作驱动。');
+      if not InstalledVersionMatches('ScreenOffTray.exe') or
+        not InstalledVersionMatches('ScreenOffTray.Settings.exe') or
+        not InstalledVersionMatches('ScreenOffTray.DriverSetup.exe') then
+        RaiseException('复制后的程序版本不一致；未确认完成。请查看安装日志。');
+#if RollbackOnly == "1"
+      try
+        if FileExists(MediaFile) then
+          if CompareText(GetSHA256OfFile(MediaFile), '{#ExpectedMediaHash}') = 0 then
+            if not DeleteFile(MediaFile) then Log('Rollback left the unused media DLL in place.');
+      except
+        Log('Rollback kept the media DLL because ownership could not be verified.');
+      end;
+#endif
+      DriverReady := True; PostInstallFailed := False; Exit;
     end;
     Started := Exec(ExpandConstant('{app}\ScreenOffTray.DriverSetup.exe'),
       'install --bundle-dir "' + ExpandConstant('{app}\Driver') + '"',
@@ -198,6 +304,7 @@ begin
     if (HelperCode <> 0) and (HelperCode <> 3010) then
       RaiseException('驱动安装失败（退出码 ' + IntToStr(HelperCode) + '）。未启动关屏功能。请保留 ProgramData\ScreenOffTray\DriverSetup 中的收据、配置和恢复材料。');
     DriverReady := HelperCode = 0;
+    PostInstallFailed := False;
     if HelperCode = 3010 then
       MsgBox('驱动报告需要重新启动。安装程序不会自动重启，也不会现在启动关屏功能。请自行重启后重新运行安装程序完成可用性检查。', mbInformation, MB_OK);
   end;
@@ -249,7 +356,8 @@ end;
 
 function GetCustomSetupExitCode: Integer;
 begin
-  if HelperCode = 3010 then Result := 3010 else Result := 0;
+  if PostInstallFailed then Result := 5
+  else if HelperCode = 3010 then Result := 3010 else Result := 0;
 end;
 
 function InitializeUninstall: Boolean;

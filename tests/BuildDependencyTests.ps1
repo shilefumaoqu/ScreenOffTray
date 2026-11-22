@@ -28,6 +28,13 @@ $destination = Get-PinnedZip 'tool.zip' 'https://example.invalid/tool.zip' $hash
 if ($script:downloads -ne 1 -or [IO.File]::ReadAllText((Join-Path $destination 'marker.txt')) -ne 'fixture') { throw 'Cold download/extraction failed.' }
 $cached = Get-PinnedZip 'tool.zip' 'https://example.invalid/tool.zip' $hash 'tool'
 if ($cached -ne $destination -or $script:downloads -ne 1) { throw 'Valid cache was not reused.' }
+[IO.File]::WriteAllText((Join-Path $cached 'marker.txt'), 'stale extracted file')
+$perBuild = Join-Path $testRoot 'per-build'
+$fresh = Get-PinnedZip 'tool.zip' 'https://example.invalid/tool.zip' $hash 'tool' -Destination $perBuild
+if ($fresh -ne $perBuild -or $script:downloads -ne 1 -or
+    [IO.File]::ReadAllText((Join-Path $fresh 'marker.txt')) -ne 'fixture') {
+    throw 'Fresh extraction did not use the verified archive.'
+}
 [IO.File]::WriteAllText((Join-Path $ToolsRoot 'tool.zip'), 'corrupted')
 try {
     Get-PinnedZip 'tool.zip' 'https://example.invalid/tool.zip' $hash 'must-not-extract' | Out-Null
@@ -36,4 +43,4 @@ try {
     if ($_.Exception.Message -notlike 'Build dependency checksum differs:*') { throw }
 }
 if (Test-Path -LiteralPath (Join-Path $ToolsRoot 'must-not-extract')) { throw 'Unverified archive was extracted.' }
-Write-Output 'PASS actual loader: cold download, binary header, valid cache reuse, hash mismatch rejected before extraction.'
+Write-Output 'PASS actual loader: cold download, binary header, valid cache reuse, fresh extraction, and hash mismatch rejected before extraction.'

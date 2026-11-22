@@ -1,0 +1,23 @@
+{
+  "Target": "x86_64-pc-windows-msvc",
+  "Rust": "1.100.0 (0ef1bc386)",
+  "MSVC": "14.44.35207",
+  "WindowsSDK": "10.0.26100.0",
+  "Command": "cargo build --offline --locked --release --target x86_64-pc-windows-msvc",
+  "Files": {
+    "src/ScreenOffTray/Playback/NativeMedia/Cargo.toml": "B72ECCBADA5E0D647A4F1FB4ACF9C859F7F633DC18D595DD0ECDF4F707C4215E",
+    "src/ScreenOffTray/Playback/NativeMedia/Cargo.lock": "7FFCE26545CECD95B7D5725B79ABE1DC559FC448F0ACB331DE9D687E5C897416",
+    "src/ScreenOffTray/Playback/NativeMedia/src/lib.rs": "AECC2BF42762476FDD6D0ED8EE75687187E38DEC207F8372900D1F038763EBEE",
+    "vendor/ScreenOffTray.Media/screenoff_media.dll": "35B7D3B03F28606EFC08F8DF8740D12F0BC36E0C202F339DA4ED30C9DACFE86D"
+  },
+  "RustFlags": [
+    "-C",
+    "target-feature=+crt-static",
+    "--remap-path-prefix",
+    "<workspace>=/screenofftray-build",
+    "--remap-path-prefix",
+    "<cargo-home>=/cargo",
+    "-C",
+    "link-arg=/PDBALTPATH:screenoff_media.pdb"
+  ]
+}
