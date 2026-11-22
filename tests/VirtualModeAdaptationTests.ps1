@@ -3,8 +3,8 @@ $ErrorActionPreference='Stop'
 $projectRoot=Split-Path -Parent $PSScriptRoot
 if(!$OutputDirectory) { $OutputDirectory=Join-Path $projectRoot 'checks/mode-adaptation-20261107/isolated' }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
-[xml]$project=Get-Content -LiteralPath (Join-Path $projectRoot 'src/ScreenOffTray/ScreenOffTray.csproj') -Raw
-$sources=@($project.SelectNodes("//*[local-name()='Compile']") | ForEach-Object {Join-Path (Join-Path $projectRoot 'src/ScreenOffTray') $_.Include}) + @(Join-Path $PSScriptRoot 'VirtualModeAdaptationTests.cs')
+[xml]$project=Get-Content -LiteralPath (Join-Path $projectRoot 'app_main/ScreenOffTray/ScreenOffTray.csproj') -Raw
+$sources=@($project.SelectNodes("//*[local-name()='Compile']") | ForEach-Object {Join-Path (Join-Path $projectRoot 'app_main/ScreenOffTray') $_.Include}) + @(Join-Path $PSScriptRoot 'VirtualModeAdaptationTests.cs')
 $references=@($project.SelectNodes("//*[local-name()='Reference']") | ForEach-Object {'/r:'+$_.Include+'.dll'})
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 $binary=Join-Path $OutputDirectory 'VirtualModeAdaptationTests.exe'

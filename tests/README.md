@@ -2,7 +2,7 @@
 
 在仓库根目录运行。脚本输出写入被忽略的 `checks/`，不会随安装包发布。
 
-- `python tests/RepositoryLayoutTests.py`：检查三个工程的声明文件、路径边界和共享源码归属，不启动程序。
+- `python tests/RepositoryLayoutTests.py`：检查三个实体源码目录、工程引用、入口路径和共享源码归属，不启动程序。
 - `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File tests/BuildEncodingTests.ps1`：在默认打包入口使用的 Windows PowerShell 5.1 下，检查实际工程读取语句的 UTF-8 解码及图标路径；不下载、构建或安装。
 - `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File tests/BuildDependencyTests.ps1`：使用本地 ZIP 夹具检查实际依赖加载函数的二进制请求头、冷缓存解压、缓存复用及错误哈希阻断；不联网、不执行下载工具。
 - `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File tests/ReleaseVersionConsistencyTests.ps1`：核对程序、设置窗口、帮助、安装器、构建脚本和 README 的公开版本字段一致。

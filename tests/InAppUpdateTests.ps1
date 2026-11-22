@@ -3,7 +3,7 @@ $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $output=[IO.Path]::GetFullPath((Join-Path $root $OutputDirectory))
 New-Item -ItemType Directory -Path $output -Force|Out-Null
-$projectDirectory=Join-Path $root 'src/ScreenOffTray'
+$projectDirectory=Join-Path $root 'app_main/ScreenOffTray'
 [xml]$project=Get-Content -LiteralPath (Join-Path $projectDirectory 'ScreenOffTray.csproj') -Raw
 $files=@($project.SelectNodes("//*[local-name()='Compile']")|ForEach-Object{Join-Path $projectDirectory $_.Include})
 $files+=Join-Path $PSScriptRoot 'InAppUpdateTests.cs'
@@ -20,7 +20,7 @@ if($installer -notmatch "(?s)param:UPDATEONLY\|0.*?not IsUpgrade.*?ResumeFirstIn
 'PASS installer update-only guard rejects fresh install, pending driver continuation and rollback (source check; not a real installation)'
 if(!$Live){
  $controller=Join-Path $output 'UpdateControllerTests.exe'
- $sources=@('src/ScreenOffTray/TrayUpdates.cs','src/ScreenOffTray/UpdateDownload.cs','src/ScreenOffTray/UpdateChecker.cs','src/Shared/SettingsWire.cs','tests/UpdateControllerTests.cs')|ForEach-Object{Join-Path $root $_}
+ $sources=@('app_main/ScreenOffTray/TrayUpdates.cs','app_main/ScreenOffTray/UpdateDownload.cs','app_main/ScreenOffTray/UpdateChecker.cs','app_request/Settings/SettingsWire.cs','tests/UpdateControllerTests.cs')|ForEach-Object{Join-Path $root $_}
  & "$env:WINDIR/Microsoft.NET/Framework64/v4.0.30319/csc.exe" /nologo /utf8output /target:exe /platform:x64 /langversion:5 /codepage:65001 ('/out:'+$controller) /r:System.dll /r:System.Core.dll /r:System.Net.Http.dll /r:System.Web.Extensions.dll $sources
  if($LASTEXITCODE){throw 'Controller compile failed'}
  & $controller 2>&1 | Tee-Object (Join-Path $output 'controller-results.txt')

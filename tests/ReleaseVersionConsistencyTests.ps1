@@ -8,7 +8,7 @@ function Expect([string]$text, [string]$pattern, [string]$name) {
     if ($text -notmatch $pattern) { throw "Release version mismatch: $name" }
 }
 
-$assembly = Read-Text 'src/Shared/AssemblyInfo.cs'
+$assembly = Read-Text 'app_main/Shared/AssemblyInfo.cs'
 $version = [regex]::Match($assembly, 'AssemblyFileVersion\("(\d+\.\d+\.\d+)\.0"\)').Groups[1].Value
 if (!$version) { throw 'AssemblyFileVersion was not found.' }
 $fullVersion = $version + '.0'
@@ -21,9 +21,9 @@ $expectedLow = ($parts.Build -shl 16) -bor $revision
 $threshold = [uint32]([regex]::Match($installer, 'VersionLS > (\d+)').Groups[1].Value)
 if ($threshold -ne $expectedLow) { throw 'Installer upgrade threshold differs from release version.' }
 
-Expect (Read-Text 'src/ScreenOffTray.Settings/app.manifest') ('<assemblyIdentity version="'+[regex]::Escape($fullVersion)+'" name="ScreenOffTray.Settings"') 'settings manifest'
-Expect (Read-Text 'src/ScreenOffTray.Settings/SettingsWindow.xaml') ([regex]::Escape($version)+'.*Windows x64') 'settings UI'
-Expect (Read-Text 'src/ScreenOffTray.Settings/SettingsWindow.cs') ('Version '+[regex]::Escape($version)+'.*Windows x64') 'settings English UI'
+Expect (Read-Text 'app_main/ScreenOffTray.Settings/app.manifest') ('<assemblyIdentity version="'+[regex]::Escape($fullVersion)+'" name="ScreenOffTray.Settings"') 'settings manifest'
+Expect (Read-Text 'app_main/ScreenOffTray.Settings/SettingsWindow.xaml') ([regex]::Escape($version)+'.*Windows x64') 'settings UI'
+Expect (Read-Text 'app_main/ScreenOffTray.Settings/SettingsWindow.cs') ('Version '+[regex]::Escape($version)+'.*Windows x64') 'settings English UI'
 Expect (Read-Text 'Installer/build.ps1') ('ScreenOffTray-'+[regex]::Escape($version)+'-Setup-x64\.exe') 'build output'
 $helpFiles = @(Get-ChildItem -LiteralPath (Join-Path $root 'resources') -Filter '*.html' -File)
 if ($helpFiles.Count -ne 1) { throw 'Expected one public help file.' }

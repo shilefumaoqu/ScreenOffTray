@@ -25,10 +25,10 @@
     <Reference Include="PresentationFramework"/><Reference Include="System.Xaml"/>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Program.cs"/><Compile Include="SettingsClient.cs"/><Compile Include="NativeBackdrop.cs"/>
+    <Compile Include="..\..\app_request\Settings\Program.cs"/><Compile Include="..\..\app_request\Settings\SettingsClient.cs"/><Compile Include="NativeBackdrop.cs"/>
     <Compile Include="SettingsWindow.cs"><DependentUpon>SettingsWindow.xaml</DependentUpon></Compile><Compile Include="WindowSizingPolicy.cs"/><Compile Include="ApplicationIcons.cs"/>
-    <Compile Include="..\Shared\SettingsWire.cs"/><Compile Include="..\Shared\HotkeyBinding.cs"/>
-    <Compile Include="..\Shared\AudioSourceNames.cs"/>
+    <Compile Include="..\..\app_request\Settings\SettingsWire.cs"/><Compile Include="..\Shared\HotkeyBinding.cs"/>
+    <Compile Include="..\..\app_tools\Windows\AudioSourceNames.cs"/>
     <Compile Include="ApplicationIconCache.cs"/>
     <Compile Include="..\Shared\AssemblyInfo.cs"/>
     <None Include="App.config"/>

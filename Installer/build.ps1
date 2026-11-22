@@ -15,7 +15,7 @@ function Get-PinnedZip([string]$Name, [string]$Url, [string]$Hash, [string]$Fold
     return $Destination
 }
 
-$mediaRoot = 'src/ScreenOffTray/Playback/NativeMedia/'
+$mediaRoot = 'app_main/ScreenOffTray/Playback/NativeMedia/'
 $mediaDll = 'vendor/ScreenOffTray.Media/screenoff_media.dll'
 $mediaReceipt = Get-Content -LiteralPath (Join-Path $productRoot 'vendor/ScreenOffTray.Media/构建记录.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 foreach ($item in @('Cargo.toml','Cargo.lock','src/lib.rs' | ForEach-Object { $mediaRoot + $_ }) + @($mediaDll)) {
@@ -54,7 +54,7 @@ function Copy-SourceFile([string]$Relative) {
     Copy-Item -LiteralPath $from -Destination $to
 }
 
-$targets = @('src\ScreenOffTray\ScreenOffTray.csproj','src\ScreenOffTray.Settings\ScreenOffTray.Settings.csproj','src\ScreenOffTray.DriverSetup\DriverSetup.csproj')
+$targets = @('app_main\ScreenOffTray\ScreenOffTray.csproj','app_main\ScreenOffTray.Settings\ScreenOffTray.Settings.csproj','app_main\ScreenOffTray.DriverSetup\DriverSetup.csproj')
 foreach ($target in $targets) {
     Copy-SourceFile $target
     $projectDirectory = Split-Path -Parent $target
@@ -71,10 +71,10 @@ foreach ($target in $targets) {
     & $msbuild (Join-Path $source $target) /t:Rebuild /tv:4.0 /p:Configuration=Release /p:Platform=AnyCPU /p:DebugSymbols=false /p:DebugType=none ("/p:TargetFrameworkRootPath=" + (Join-Path $referenceRoot 'build\')) /nologo /v:minimal 2>&1 | Tee-Object -FilePath (Join-Path $checks ((Split-Path -Leaf $target) + '.log'))
     if ($LASTEXITCODE -ne 0) { throw "Build failed: $target" }
 }
-Copy-Item -LiteralPath (Join-Path $source 'src\ScreenOffTray\bin\Release\ScreenOffTray.exe') -Destination $payload
-Copy-Item -LiteralPath (Join-Path $source 'src\ScreenOffTray\bin\Release\ScreenOffTray.exe.config') -Destination $payload
-Copy-Item -LiteralPath (Join-Path $source 'src\ScreenOffTray.DriverSetup\bin\Release\ScreenOffTray.DriverSetup.exe') -Destination $payload
-foreach($name in @('ScreenOffTray.Settings.exe','ScreenOffTray.Settings.exe.config')){Copy-Item -LiteralPath (Join-Path $source ('src\ScreenOffTray.Settings\bin\Release\'+$name)) -Destination $payload}
+Copy-Item -LiteralPath (Join-Path $source 'app_main\ScreenOffTray\bin\Release\ScreenOffTray.exe') -Destination $payload
+Copy-Item -LiteralPath (Join-Path $source 'app_main\ScreenOffTray\bin\Release\ScreenOffTray.exe.config') -Destination $payload
+Copy-Item -LiteralPath (Join-Path $source 'app_main\ScreenOffTray.DriverSetup\bin\Release\ScreenOffTray.DriverSetup.exe') -Destination $payload
+foreach($name in @('ScreenOffTray.Settings.exe','ScreenOffTray.Settings.exe.config')){Copy-Item -LiteralPath (Join-Path $source ('app_main\ScreenOffTray.Settings\bin\Release\'+$name)) -Destination $payload}
 
 Copy-Item -LiteralPath (Join-Path $productRoot $mediaDll) -Destination $payload
 if ((Get-FileHash -LiteralPath (Join-Path $payload 'screenoff_media.dll')).Hash -ne $mediaHash) { throw 'Staged media DLL differs' }

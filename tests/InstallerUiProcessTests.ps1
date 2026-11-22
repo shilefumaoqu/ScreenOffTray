@@ -2,7 +2,7 @@ $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $out=Join-Path $root ('checks/optimization-01911/installer-process-'+(Get-Date -Format yyyyMMdd-HHmmss))
 [void][IO.Directory]::CreateDirectory($out)
-$source=Join-Path $out 'Fixture.cs';$binary=Join-Path $out 'ScreenOffTray.Settings.exe';$helper=Join-Path $root 'src/ScreenOffTray.DriverSetup/bin/Release/ScreenOffTray.DriverSetup.exe'
+$source=Join-Path $out 'Fixture.cs';$binary=Join-Path $out 'ScreenOffTray.Settings.exe';$helper=Join-Path $root 'app_main/ScreenOffTray.DriverSetup/bin/Release/ScreenOffTray.DriverSetup.exe'
 @'
 using System;using System.IO;using System.Threading;
 internal static class Fixture{private static int Main(){string directory=AppDomain.CurrentDomain.BaseDirectory;File.WriteAllText(Path.Combine(directory,"ready"),"ready");for(int i=0;i<600 && !File.Exists(Path.Combine(directory,"stop"));i++)Thread.Sleep(50);return 0;}}
