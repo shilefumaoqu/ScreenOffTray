@@ -1,3 +1,11 @@
+# ScreenOffTray 0.2.7
+
+- Rust 接管 Windows 播放器状态读取。音频轮询仍为 5 秒，播放保护、暂停过滤和读取失败后的音频判断沿用原规则。
+- 使用安装包同一份 DLL 做五分钟隔离测量。28 个样本均低于 20 MB 私有驻留，峰值 19.16 MB。正式后台占用和实机升级仍待验收。
+- 0.2.6 可从“关于 → 检查更新”下载安装。升级和程序回退使用既有驱动的只读核验，保留设置。
+
+Rust now reads Windows media session states. The five-second poll interval, playback protection, pause filtering, and audio fallback remain in place. A five-minute isolated run using the packaged DLL stayed below 20 MB of private resident memory across 28 samples, peaking at 19.16 MB. The installed background process and live upgrade have yet to be verified. Version 0.2.6 can upgrade from About → Check for updates.
+
 # ScreenOffTray 0.2.6
 
 新增应用内更新：在“关于”页下载新版，显示进度并支持取消、重试和手动下载。软件核对官方 Release 的精确安装包名称、HTTPS 地址、大小与 SHA256，校验后由用户点击“保存并重启更新”，保存当前设置草稿、正常退出，再请求 Windows 安装权限。没有常驻更新服务。

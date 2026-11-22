@@ -1,12 +1,10 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
+using System;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32.SafeHandles;
 
 namespace ScreenOffTray.Playback
 {
@@ -25,6 +23,7 @@ namespace ScreenOffTray.Playback
         private readonly Func<object, MediaSessionStatus[]> read;
         private readonly Action changed;
         private readonly Func<long> clock;
+        private readonly RustMediaApi native;
         private Task<object> pending;
         private bool requested, failed;
         private int failures, retryRequested;
@@ -34,9 +33,9 @@ namespace ScreenOffTray.Playback
         internal void RequestRetry() { Interlocked.Exchange(ref retryRequested, 1); }
         private int disposed;
 
-        internal WinRtMediaStateReader(Action changed) : this(new ReflectionMediaApi(), changed) { }
-        private WinRtMediaStateReader(ReflectionMediaApi api, Action changed)
-            : this(api.RequestAsync, api.Read, changed, MediaClock.Milliseconds) { }
+        internal WinRtMediaStateReader(Action changed) : this(new RustMediaApi(), changed) { }
+        private WinRtMediaStateReader(RustMediaApi api, Action changed)
+            : this(api.RequestAsync, api.Read, changed, MediaClock.Milliseconds) { native = api; }
 
         internal WinRtMediaStateReader(Func<Task<object>> request, Func<object, MediaSessionStatus[]> read,
             Action changed, Func<long> clock)
@@ -49,7 +48,10 @@ namespace ScreenOffTray.Playback
             if (Volatile.Read(ref disposed) != 0) return Unknown();
             if (Volatile.Read(ref retryRequested) != 0 && (pending == null || pending.IsCompleted)) {
                 Interlocked.Exchange(ref retryRequested, 0);
-                if (failures>0) { failed = false; requested = false; pending = null; retryAt = clock(); }
+                if (failures>0) {
+                    if (native != null) native.Dispose();
+                    failed = false; requested = false; pending = null; retryAt = clock();
+                }
             }
             if (failed || (!requested && clock() < retryAt)) return Unknown();
             try
@@ -69,7 +71,7 @@ namespace ScreenOffTray.Playback
                     RequestFailed(); return Unknown();
                 }
                 object manager = pending.Result; // Only reached after completion; never waits.
-                if (manager == null) { RequestFailed(); return Unknown(); }
+                if (manager == null || (native != null && !native.CompleteRequest())) { RequestFailed(); return Unknown(); }
                 // The earliest status may already be old when later sessions finish.
                 long observedAt = clock();
                 MediaSessionStatus[] sessions = read(manager);
@@ -86,6 +88,7 @@ namespace ScreenOffTray.Playback
 
         private void RequestFailed()
         {
+            if (native != null) native.Dispose();
             pending = null; requested = false;
             if (failures < RetryDelays.Length) retryAt = clock() + RetryDelays[failures++];
             else { failures++; failed = true; }
@@ -103,51 +106,103 @@ namespace ScreenOffTray.Playback
         }
 
         // No WinRT/COM callbacks or waits on the caller. The monitor closes on its existing worker.
-        public void Dispose() { Interlocked.Exchange(ref disposed, 1); }
-
-        private sealed class ReflectionMediaApi
+        public void Dispose()
         {
-            private Type managerType, sessionType, infoType;
-            private MethodInfo adapter;
+            if (Interlocked.Exchange(ref disposed, 1) == 0 && native != null) native.Dispose();
+        }
+
+
+#if MEDIA_CANDIDATE_PROBE
+        internal static long RustReads, RustPlayingReads, RustPausedReads;
+#endif
+        private sealed class RustMediaApi : IDisposable
+        {
+            private const string Dll = "screenoff_media.dll";
+            private const DllImportSearchPath Search = DllImportSearchPath.AssemblyDirectory | DllImportSearchPath.System32;
+            private IntPtr reader;
+            private ManualResetEvent completed;
+            private RegisteredWaitHandle wait;
+            private bool ready;
 
             internal Task<object> RequestAsync()
             {
-                managerType = Type.GetType("Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType=WindowsRuntime", true);
-                sessionType = Type.GetType("Windows.Media.Control.GlobalSystemMediaTransportControlsSession, Windows.Media.Control, ContentType=WindowsRuntime", true);
-                infoType = Type.GetType("Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackInfo, Windows.Media.Control, ContentType=WindowsRuntime", true);
-                // System-owned Framework library; no SDK/runtime files are shipped with the prototype.
-                Assembly extensions = Assembly.LoadFrom(Path.Combine(RuntimeEnvironment.GetRuntimeDirectory(), "System.Runtime.WindowsRuntime.dll"));
-                foreach (MethodInfo method in extensions.GetType("System.WindowsRuntimeSystemExtensions", true).GetMethods())
-                    if (method.Name == "AsTask" && method.IsGenericMethodDefinition && method.GetParameters().Length == 1 &&
-                        method.GetParameters()[0].ParameterType.Name == "IAsyncOperation`1") adapter = method;
-                if (adapter == null) throw new NotSupportedException("WinRT task projection unavailable");
-                object operation = managerType.GetMethod("RequestAsync").Invoke(null, null);
-                Task native = (Task)adapter.MakeGenericMethod(managerType).Invoke(null, new[] { operation });
-                // Project an unknown runtime generic type without adding WinMD build dependencies.
-                return native.ContinueWith(delegate(Task completed)
-                {
-                    if (completed.IsCanceled) throw new OperationCanceledException();
-                    if (completed.IsFaulted) throw completed.Exception;
-                    return completed.GetType().GetProperty("Result").GetValue(completed, null);
-                }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+                completed = new ManualResetEvent(false);
+                var result = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+                wait = ThreadPool.RegisterWaitForSingleObject(completed, Signal, result, Timeout.Infinite, true);
+                Marshal.ThrowExceptionForHR(media_open(completed.SafeWaitHandle, out reader), new IntPtr(-1));
+                return result.Task;
             }
 
-            internal MediaSessionStatus[] Read(object manager)
+            private static void Signal(object state, bool timedOut)
             {
-                var sessions = (IEnumerable)managerType.GetMethod("GetSessions").Invoke(manager, null);
-                var result = new List<MediaSessionStatus>();
-                foreach (object session in sessions)
-                {
-                    if (session == null || result.Count >= 128) throw new InvalidDataException("Media session bounds");
-                    string id = (string)sessionType.GetProperty("SourceAppUserModelId").GetValue(session, null);
-                    if (String.IsNullOrWhiteSpace(id) || id.Length > 1024) throw new InvalidDataException("Media identity unavailable");
-                    object info = sessionType.GetMethod("GetPlaybackInfo").Invoke(session, null);
-                    string status = Convert.ToString(infoType.GetProperty("PlaybackStatus").GetValue(info, null));
-                    result.Add(new MediaSessionStatus { SourceAppId = id,
-                        State = status == "Paused" ? MediaSessionPlayback.Paused : status == "Playing" ? MediaSessionPlayback.Playing : MediaSessionPlayback.Other });
-                }
-                return result.ToArray();
+                ((TaskCompletionSource<object>)state).TrySetResult(true);
             }
+
+            internal bool CompleteRequest()
+            {
+                if (ready) return true;
+                ready = media_finish(reader) == 0;
+                ReleaseWait();
+                return ready;
+            }
+
+            internal MediaSessionStatus[] Read(object completion)
+            {
+                int count = media_sample(reader);
+                if (count < 0 || count > 128) throw new InvalidDataException("Media session bounds");
+                var result = new MediaSessionStatus[count];
+#if MEDIA_CANDIDATE_PROBE
+                bool playing = false, paused = false;
+#endif
+                for (int i = 0; i < count; i++)
+                {
+                    Row row;
+                    if (media_row(reader, (UIntPtr)(uint)i, out row) != 0 || row.Id == IntPtr.Zero ||
+                        row.Length < 1 || row.Length > 1024 || row.State < 1 || row.State > 3)
+                        throw new InvalidDataException("Invalid native media row");
+                    string id = Marshal.PtrToStringUni(row.Id, row.Length);
+                    if (String.IsNullOrWhiteSpace(id)) throw new InvalidDataException("Media identity unavailable");
+                    var status = (MediaSessionPlayback)row.State;
+#if MEDIA_CANDIDATE_PROBE
+                    playing |= status == MediaSessionPlayback.Playing;
+                    paused |= status == MediaSessionPlayback.Paused;
+#endif
+                    result[i] = new MediaSessionStatus { SourceAppId = id, State = status };
+                }
+#if MEDIA_CANDIDATE_PROBE
+                Interlocked.Increment(ref RustReads);
+                if (playing) Interlocked.Increment(ref RustPlayingReads);
+                if (paused) Interlocked.Increment(ref RustPausedReads);
+#endif
+                return result;
+            }
+
+            private void ReleaseWait()
+            {
+                if (wait != null) { wait.Unregister(null); wait = null; }
+                if (completed != null) { completed.Dispose(); completed = null; }
+            }
+
+            public void Dispose()
+            {
+                ReleaseWait();
+                if (reader != IntPtr.Zero) { media_close(reader); reader = IntPtr.Zero; }
+                ready = false;
+            }
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct Row { internal IntPtr Id; internal int Length; internal int State; }
+
+            [DllImport(Dll, ExactSpelling = true), DefaultDllImportSearchPaths(Search)]
+            private static extern int media_open(SafeWaitHandle completed, out IntPtr reader);
+            [DllImport(Dll, ExactSpelling = true), DefaultDllImportSearchPaths(Search)]
+            private static extern int media_finish(IntPtr reader);
+            [DllImport(Dll, ExactSpelling = true), DefaultDllImportSearchPaths(Search)]
+            private static extern int media_sample(IntPtr reader);
+            [DllImport(Dll, ExactSpelling = true), DefaultDllImportSearchPaths(Search)]
+            private static extern int media_row(IntPtr reader, UIntPtr index, out Row value);
+            [DllImport(Dll, ExactSpelling = true), DefaultDllImportSearchPaths(Search)]
+            private static extern void media_close(IntPtr reader);
         }
     }
 

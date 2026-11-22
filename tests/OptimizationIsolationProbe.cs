@@ -135,6 +135,9 @@ namespace ScreenOffTray.Tests
             double elapsed=clock.Elapsed.TotalSeconds;
             var value=new{Seconds=elapsed,Phase=ui!=null?"settings":elapsed<300?"warmup":elapsed-lastClose<120?"cooldown":"background",UiPid=pid,UiTicks=ticks,UiPath=uiPath,
                 LastCloseSeconds=lastClose,Opened=opened,Closed=closed,Shown=shown,AudioReads=Interlocked.Read(ref audioReads),DisplayReads=Interlocked.Read(ref displayReads),DisplayFailures=Interlocked.Read(ref displayFailures),
+                #if MEDIA_CANDIDATE_PROBE
+                RustReads=Interlocked.Read(ref WinRtMediaStateReader.RustReads),RustPlaying=Interlocked.Read(ref WinRtMediaStateReader.RustPlayingReads),RustPaused=Interlocked.Read(ref WinRtMediaStateReader.RustPausedReads),
+#endif
                 AudioKnown=state.AudioKnown,Sources=state.Sources==null?0:state.Sources.Length,StatusDrops=statusDrops,Managed=GC.GetTotalMemory(false),Gc0=GC.CollectionCount(0),Gc1=GC.CollectionCount(1),Gc2=GC.CollectionCount(2)};
             try {File.WriteAllText(Path.Combine(output,"live.tmp"),json.Serialize(value));if(File.Exists(Path.Combine(output,"live.json")))File.Replace(Path.Combine(output,"live.tmp"),Path.Combine(output,"live.json"),null);else File.Move(Path.Combine(output,"live.tmp"),Path.Combine(output,"live.json"));}catch(IOException){statusDrops++;}
         }
