@@ -3,10 +3,10 @@ $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 if(!$OutputDirectory){$OutputDirectory=Join-Path $root 'checks/repair-01913/dpi-prototype'}
 New-Item -ItemType Directory -Path $OutputDirectory -Force|Out-Null
-[xml]$project=Get-Content -LiteralPath (Join-Path $root 'src/ScreenOffTray/ScreenOffTray.csproj') -Raw
-$sources=@($project.SelectNodes("//*[local-name()='Compile']")|ForEach-Object{Join-Path (Join-Path $root 'src/ScreenOffTray') $_.Include})
+[xml]$project=Get-Content -LiteralPath (Join-Path $root 'app_main/ScreenOffTray/ScreenOffTray.csproj') -Raw
+$sources=@($project.SelectNodes("//*[local-name()='Compile']")|ForEach-Object{Join-Path (Join-Path $root 'app_main/ScreenOffTray') $_.Include})
 # This test/inspector executable and its guardian must log only beside themselves.
-$bridge=Join-Path $root 'src/ScreenOffTray/Oled/RuntimeBridge.cs'
+$bridge=Join-Path $root 'app_main/ScreenOffTray/Oled/RuntimeBridge.cs'
 $original=Get-Content -LiteralPath $bridge -Raw
 $pattern='(?s)internal static readonly string Runtime = Path.Combine\(.*?"ScreenOffTray", "运行记录"\);'
 if([regex]::Matches($original,$pattern).Count -ne 1){throw 'Runtime isolation instrumentation drift'}

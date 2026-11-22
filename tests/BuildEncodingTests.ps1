@@ -11,7 +11,7 @@ $assignment = $ast.Find({ param($node)
 if (!$assignment) { throw 'Actual build project loader not found.' }
 # Exercise the actual loader only, without downloading tools or building/installing.
 $load = [scriptblock]::Create($assignment.Extent.Text)
-foreach ($target in @('src/ScreenOffTray/ScreenOffTray.csproj','src/ScreenOffTray.Settings/ScreenOffTray.Settings.csproj','src/ScreenOffTray.DriverSetup/DriverSetup.csproj')) {
+foreach ($target in @('app_main/ScreenOffTray/ScreenOffTray.csproj','app_main/ScreenOffTray.Settings/ScreenOffTray.Settings.csproj','app_main/ScreenOffTray.DriverSetup/DriverSetup.csproj')) {
     $project = $null
     . $load
     [xml]$expected = [IO.File]::ReadAllText((Join-Path $productRoot $target), [Text.Encoding]::UTF8)

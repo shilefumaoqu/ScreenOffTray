@@ -37,16 +37,19 @@ function Deny-Body([string]$text,[string]$signature){
  if($level -ne 0){throw 'Guard lexical scan failed'}
  return $text.Substring(0,$begin)+'{ throw new InvalidOperationException("Blocked in isolated memory diagnostics"); }'+$text.Substring($i+1)
 }
-[xml]$project=[IO.File]::ReadAllText((Join-Path $root 'src/ScreenOffTray/ScreenOffTray.csproj'))
+[xml]$project=[IO.File]::ReadAllText((Join-Path $root 'app_main/ScreenOffTray/ScreenOffTray.csproj'))
+$prefix=$root+'\'
 $sources=foreach($node in $project.SelectNodes("//*[local-name()='Compile']")){
- $relative=$node.Include;$original=Join-Path (Join-Path $root 'src/ScreenOffTray') $relative
+ $original=[IO.Path]::GetFullPath((Join-Path (Join-Path $root 'app_main/ScreenOffTray') $node.Include))
+ if(!$original.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)){throw 'Diagnostic source outside project root'}
+ $relative=$original.Substring($prefix.Length)
  $text=[IO.File]::ReadAllText($original);$before=$text
- if($relative -eq 'Program.cs'){$text=Deny-Body $text 'private static void Main(string[] args)'}
- if($relative -eq 'TrayApplicationContext.cs'){$text=Deny-Body $text 'internal TrayApplicationContext(bool initialSetupRequested = false,Action<bool,bool> startupConfirmation=null)'}
- if($relative -eq 'Properties\Settings.cs'){
+ if($relative -eq 'app_request\ScreenOffTray\Program.cs'){$text=Deny-Body $text 'private static void Main(string[] args)'}
+ if($relative -eq 'app_main\ScreenOffTray\TrayApplicationContext.cs'){$text=Deny-Body $text 'internal TrayApplicationContext(bool initialSetupRequested = false,Action<bool,bool> startupConfirmation=null)'}
+ if($relative -eq 'app_main\ScreenOffTray\Properties\Settings.cs'){
   $text=Replace-Exact $text 'get { return DefaultInstance; }' 'get { throw new System.InvalidOperationException("Formal settings blocked in memory diagnostics"); }'
  }
- if($relative -eq 'Oled\RuntimeBridge.cs'){
+ if($relative -eq 'app_main\ScreenOffTray\Oled\RuntimeBridge.cs'){
   $text=Replace-Exact $text 'Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)' 'AppDomain.CurrentDomain.BaseDirectory'
   $text=Replace-Exact $text '"ScreenOffTray", "运行记录"' '"diagnostic-runtime", "logs"'
   $text=Replace-Exact $text 'internal static class Native' 'internal static class Native'
@@ -59,7 +62,7 @@ $sources=foreach($node in $project.SelectNodes("//*[local-name()='Compile']")){
    $text=$text.Remove($match.Index,$match.Length).Insert($match.Index,$replacement)
   }
  }
- if($relative -eq '..\Shared\DisplayBackend.cs'){
+ if($relative -eq 'app_tools\Windows\DisplayBackend.cs'){
   foreach($signature in @('public void TurnOff()','public void Restore()','public static void Recover(string path)','public void SaveRecovery(string path)')){$text=Deny-Body $text $signature}
   $text=Replace-Exact $text 'private static class Native' 'internal static class Native'
   $needle='internal static extern int SetDisplayConfig(uint pathCount, [In] PathInfo[] paths,'
@@ -71,7 +74,7 @@ $sources=foreach($node in $project.SelectNodes("//*[local-name()='Compile']")){
   $insert='internal static class Native'+"`n        {`n"+'            internal static int SetDisplayConfig(uint pc, PathInfo[] p, uint mc, ModeInfo[] m, uint flags) { if ((flags & 0x80U) != 0 || (flags & 0x40U) == 0 || (flags & ~(0x20U|0x40U|0x400U|0x8000U)) != 0) throw new InvalidOperationException("Only VALIDATE permitted"); return ValidateDisplayConfigNative(pc,p,mc,m,flags); }'
   $text=[regex]::Replace($text,'internal static class Native\s*\{',[Text.RegularExpressions.MatchEvaluator]{param($m) $insert},1)
  }
- if($relative -eq 'DisplaySetup.cs'){
+ if($relative -eq 'app_main\ScreenOffTray\DisplaySetup.cs'){
   $text=Deny-Body $text 'internal bool PrepareDisplay(Func<IVirtualModePlatform> platform)'
   $text=Deny-Body $text 'private async Task<bool> PrepareDisplayAsync(Func<IVirtualModePlatform> platform)'
   $text=Deny-Body $text 'private bool AutoPrepare(VirtualModeRequirement requirement, Action verifyMode)'
@@ -79,11 +82,11 @@ $sources=foreach($node in $project.SelectNodes("//*[local-name()='Compile']")){
   $needle='[DllImport("user32.dll", ExactSpelling = true)] private static extern int SetDisplayConfig(uint pc, [In] DisplayBackend.PathInfo[] paths, uint mc, [In] DisplayBackend.ModeInfo[] modes, uint flags);'
   $text=Replace-Exact $text $needle 'private static int SetDisplayConfig(uint pc, DisplayBackend.PathInfo[] paths, uint mc, DisplayBackend.ModeInfo[] modes, uint flags) { throw new InvalidOperationException("Display apply blocked in diagnostics"); }'
  }
- if($relative -eq 'VirtualModeNative.cs'){
+ if($relative -eq 'app_main\ScreenOffTray\VirtualModeNative.cs'){
   $text=Deny-Body $text 'public string Commit(byte[] original, byte[] desired, VirtualModeRequirement requirement)'
   $text=Deny-Body $text 'public void Restart(VirtualModeRequirement requirement)'
  }
- $destination=Join-Path $copies ($relative.Replace('..\Shared\','Shared\'));[void][IO.Directory]::CreateDirectory((Split-Path -Parent $destination))
+ $destination=Join-Path $copies $relative;[void][IO.Directory]::CreateDirectory((Split-Path -Parent $destination))
  [IO.File]::WriteAllText($destination,$text,$utf8)
  $manifest.Add([pscustomobject]@{Path=$relative;SourceHash=(Get-FileHash -LiteralPath $original).Hash;DiagnosticHash=(Get-FileHash -LiteralPath $destination).Hash;Modified=($before -cne $text)})
  $destination
@@ -92,7 +95,7 @@ $manifest|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $OutputDir
 $sources+=Join-Path $PSScriptRoot 'OptimizationIsolationProbe.cs'
 $sources+=Join-Path $PSScriptRoot 'OwnedProcessIdentity.cs'
 $references=@($project.SelectNodes("//*[local-name()='Reference']")|ForEach-Object{'/r:'+$_.Include+'.dll'})
-$resources=@($project.SelectNodes("//*[local-name()='EmbeddedResource']")|ForEach-Object{'/resource:'+(Join-Path (Join-Path $root 'src/ScreenOffTray') $_.Include)+','+$_.LogicalName})
+$resources=@($project.SelectNodes("//*[local-name()='EmbeddedResource']")|ForEach-Object{'/resource:'+(Join-Path (Join-Path $root 'app_main/ScreenOffTray') $_.Include)+','+$_.LogicalName})
 $binary=Join-Path $OutputDirectory 'ScreenOffMemoryIsolation.exe'
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $mediaOptions=@()
@@ -100,7 +103,7 @@ if($MediaDll){
  Copy-Item -LiteralPath $MediaDll -Destination (Join-Path $OutputDirectory 'screenoff_media.dll')
  $mediaOptions+= '/define:MEDIA_CANDIDATE_PROBE'
 }
-$log=& $compiler @mediaOptions /nologo /utf8output /target:exe /platform:x64 /optimize+ /langversion:5 /codepage:65001 /main:ScreenOffTray.Tests.OptimizationIsolationProbe ('/out:'+$binary) $references ('/win32manifest:'+(Join-Path $root 'src/ScreenOffTray/app.manifest')) $resources $sources 2>&1
+$log=& $compiler @mediaOptions /nologo /utf8output /target:exe /platform:x64 /optimize+ /langversion:5 /codepage:65001 /main:ScreenOffTray.Tests.OptimizationIsolationProbe ('/out:'+$binary) $references ('/win32manifest:'+(Join-Path $root 'app_main/ScreenOffTray/app.manifest')) $resources $sources 2>&1
 [IO.File]::WriteAllLines((Join-Path $OutputDirectory 'compile.txt'),[string[]]@($log|ForEach-Object{$_.ToString()}),$utf8)
 if($LASTEXITCODE){throw "Diagnostic build failed: $log"}
 if(!$CompileOnly){

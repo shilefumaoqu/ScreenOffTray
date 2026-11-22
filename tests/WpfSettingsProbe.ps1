@@ -7,17 +7,17 @@ $framework=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319'
 if(!$ReferenceRoot){$ReferenceRoot=Join-Path $env:LOCALAPPDATA 'ScreenOffTray-Build/Tools/net48-1.0.3/build/'}
 $refs=@('/r:System.Drawing.dll','/r:System.Web.Extensions.dll','/r:System.dll','/r:System.Core.dll',('/r:'+(Join-Path $framework 'WPF/PresentationFramework.dll')),('/r:'+(Join-Path $framework 'WPF/PresentationCore.dll')),('/r:'+(Join-Path $framework 'WPF/WindowsBase.dll')),('/r:'+(Join-Path $framework 'System.Xaml.dll')))
 if(!(Test-Path -LiteralPath (Join-Path $framework 'WPF/WindowsBase.dll'))){$refs=$refs|ForEach-Object{$_ -replace 'WPF/WindowsBase.dll','WindowsBase.dll'}}
-& (Join-Path $framework 'MSBuild.exe') (Join-Path $root 'src/ScreenOffTray.Settings/ScreenOffTray.Settings.csproj') /p:Configuration=Release ('/p:TargetFrameworkRootPath='+$referenceRoot) /v:quiet /nologo
+& (Join-Path $framework 'MSBuild.exe') (Join-Path $root 'app_main/ScreenOffTray.Settings/ScreenOffTray.Settings.csproj') /p:Configuration=Release ('/p:TargetFrameworkRootPath='+$referenceRoot) /v:quiet /nologo
 if($LASTEXITCODE){throw 'Compiled WPF markup build failed'}
-$resources=@('/resource:'+ (Join-Path $root 'src/ScreenOffTray.Settings/obj/Release/ScreenOffTray.Settings.g.resources')+',WpfSettingsProbe.g.resources')
+$resources=@('/resource:'+ (Join-Path $root 'app_main/ScreenOffTray.Settings/obj/Release/ScreenOffTray.Settings.g.resources')+',WpfSettingsProbe.g.resources')
 $generatedCode=Join-Path $output 'SettingsWindow.probe.g.cs'
-$markupCode=[IO.File]::ReadAllText((Join-Path $root 'src/ScreenOffTray.Settings/obj/Release/SettingsWindow.g.cs'))
+$markupCode=[IO.File]::ReadAllText((Join-Path $root 'app_main/ScreenOffTray.Settings/obj/Release/SettingsWindow.g.cs'))
 $markupCode=$markupCode.Replace('/ScreenOffTray.Settings;component/','/WpfSettingsProbe;component/')
 [IO.File]::WriteAllText($generatedCode,$markupCode,[Text.UTF8Encoding]::new($true))
-if($PipeFixture){$refs+='/r:System.Xml.dll';$fixtureSources=@((Join-Path $root 'src/ScreenOffTray.Settings/Program.cs'),(Join-Path $root 'src/ScreenOffTray.Settings/SettingsClient.cs'),(Join-Path $root 'src/ScreenOffTray/SettingsPipeHost.cs'));$fixtureMain='/main:WpfPipeFixture'}else{$fixtureSources=@();$fixtureMain='/main:'+$(if($LayoutTests){'WpfSettingsLayoutTests'}elseif($ResizeDiagnostic){'WpfResizeDiagnostic'}else{'WpfSettingsProbe'})}
+if($PipeFixture){$refs+='/r:System.Xml.dll';$fixtureSources=@((Join-Path $root 'app_request/Settings/Program.cs'),(Join-Path $root 'app_request/Settings/SettingsClient.cs'),(Join-Path $root 'app_request/Settings/SettingsPipeHost.cs'));$fixtureMain='/main:WpfPipeFixture'}else{$fixtureSources=@();$fixtureMain='/main:'+$(if($LayoutTests){'WpfSettingsLayoutTests'}elseif($ResizeDiagnostic){'WpfResizeDiagnostic'}else{'WpfSettingsProbe'})}
 if($StageTimings){
  if(!$PipeFixture){throw 'Stage timing requires the real UI pipe fixture'}
- $program=[IO.File]::ReadAllText((Join-Path $root 'src/ScreenOffTray.Settings/Program.cs'))
+ $program=[IO.File]::ReadAllText((Join-Path $root 'app_request/Settings/Program.cs'))
  $trace='private static readonly System.Diagnostics.Stopwatch traceClock=System.Diagnostics.Stopwatch.StartNew(); private static void Mark(string stage){System.IO.File.AppendAllText(System.IO.Path.Combine(Environment.GetEnvironmentVariable("SCREENOFF_WPF_FIXTURE_OUTPUT"),"startup-stages.csv"),stage+","+traceClock.Elapsed.TotalMilliseconds+Environment.NewLine);}'
  $program=$program.Replace('private static Application application;',$trace+' private static Application application;')
  if($ProcessSoftware){$program=$program.Replace('application=new Application','System.Windows.Media.RenderOptions.ProcessRenderMode=System.Windows.Interop.RenderMode.SoftwareOnly;application=new Application')}
@@ -30,10 +30,10 @@ if($StageTimings){
  $generated=Join-Path $output 'Program.stage.cs';[IO.File]::WriteAllText($generated,$program,[Text.UTF8Encoding]::new($true));$fixtureSources[0]=$generated
 }
 $binary=Join-Path $output 'WpfSettingsProbe.exe'
-$fixtureSources+=(Join-Path $root 'src/ScreenOffTray.Settings/NativeBackdrop.cs')
-& (Join-Path $framework 'csc.exe') /nologo /utf8output /target:exe /platform:x64 /langversion:5 /optimize+ /codepage:65001 $fixtureMain ('/out:'+$binary) ('/win32manifest:'+(Join-Path $root 'src/ScreenOffTray.Settings/app.manifest')) $refs $resources $fixtureSources $generatedCode (Join-Path $root 'src/ScreenOffTray.Settings/SettingsWindow.cs') (Join-Path $root 'src/ScreenOffTray.Settings/WindowSizingPolicy.cs') (Join-Path $root 'src/ScreenOffTray.Settings/ApplicationIcons.cs') (Join-Path $root 'src/ScreenOffTray.Settings/ApplicationIconCache.cs') (Join-Path $root 'src/Shared/AudioSourceNames.cs') (Join-Path $root 'src/Shared/HotkeyBinding.cs') (Join-Path $root 'src/Shared/SettingsWire.cs') (Join-Path $PSScriptRoot $(if($PipeFixture){'WpfPipeFixture.cs'}elseif($LayoutTests){'WpfSettingsLayoutTests.cs'}elseif($ResizeDiagnostic){'WpfResizeDiagnostic.cs'}else{'WpfSettingsProbe.cs'})) 2>&1|Tee-Object (Join-Path $output 'compile.txt')
+$fixtureSources+=(Join-Path $root 'app_main/ScreenOffTray.Settings/NativeBackdrop.cs')
+& (Join-Path $framework 'csc.exe') /nologo /utf8output /target:exe /platform:x64 /langversion:5 /optimize+ /codepage:65001 $fixtureMain ('/out:'+$binary) ('/win32manifest:'+(Join-Path $root 'app_main/ScreenOffTray.Settings/app.manifest')) $refs $resources $fixtureSources $generatedCode (Join-Path $root 'app_main/ScreenOffTray.Settings/SettingsWindow.cs') (Join-Path $root 'app_main/ScreenOffTray.Settings/WindowSizingPolicy.cs') (Join-Path $root 'app_main/ScreenOffTray.Settings/ApplicationIcons.cs') (Join-Path $root 'app_main/ScreenOffTray.Settings/ApplicationIconCache.cs') (Join-Path $root 'app_tools/Windows/AudioSourceNames.cs') (Join-Path $root 'app_main/Shared/HotkeyBinding.cs') (Join-Path $root 'app_request/Settings/SettingsWire.cs') (Join-Path $PSScriptRoot $(if($PipeFixture){'WpfPipeFixture.cs'}elseif($LayoutTests){'WpfSettingsLayoutTests.cs'}elseif($ResizeDiagnostic){'WpfResizeDiagnostic.cs'}else{'WpfSettingsProbe.cs'})) 2>&1|Tee-Object (Join-Path $output 'compile.txt')
 if($LASTEXITCODE -ne 0){throw 'WPF compile failed'}
-Copy-Item -LiteralPath (Join-Path $root 'src/ScreenOffTray.Settings/App.config') -Destination ($binary+'.config')
+Copy-Item -LiteralPath (Join-Path $root 'app_main/ScreenOffTray.Settings/App.config') -Destination ($binary+'.config')
 if($CompileOnly){Write-Output $binary;return}
 $launcher=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'MemoryIsolationRun.ps1') -Raw
 $definition=[regex]::Match($launcher,"(?s)Add-Type -TypeDefinition @'\r?\n(.*?)\r?\n'@").Groups[1].Value
