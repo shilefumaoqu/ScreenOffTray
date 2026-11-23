@@ -128,7 +128,7 @@ namespace ScreenOffTray.SettingsUi
             {
                 string value;
                 if(StaticTranslations.TryGetValue(text.Text,out value))text.Text=value;
-                else if(text.Text=="版本 0.2.7 · Windows x64")text.Text="Version 0.2.7 · Windows x64";
+                else if(text.Text=="版本 0.2.8 · Windows x64")text.Text="Version 0.2.8 · Windows x64";
             }
             var control=root as ContentControl;
             if(control!=null && control.Content is string)
@@ -190,8 +190,8 @@ namespace ScreenOffTray.SettingsUi
             else SetError(why);
         }
 
-        public void SetBusy(bool busy){viewBusy=busy;ApplyBusy();}
-        public void SetDisconnected(){SetBusy(true);CancelButton.IsEnabled=true;}
+        public void SetBusy(bool busy, bool allowCancel=false){viewBusy=busy;ApplyBusy();if(allowCancel)CancelButton.IsEnabled=true;}
+        public void SetDisconnected(){SetBusy(true,true);}
         public void SetListBusy(bool busy){listBusy=busy;ApplyBusy();}
 
         internal void SetMigrationChoices(int[] values)

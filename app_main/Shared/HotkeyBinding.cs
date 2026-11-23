@@ -95,6 +95,16 @@ namespace ScreenOffTray
     internal sealed class HotkeyInputState
     {
         private readonly HashSet<int> heldModifiers = new HashSet<int>();
+        internal int HeldShortcutKey { get; private set; }
+
+        internal void HoldShortcut(int key) { HeldShortcutKey = key; }
+
+        internal bool ConsumePairedShortcut(int key, bool up, bool injected)
+        {
+            if (injected || HeldShortcutKey == 0 || key != HeldShortcutKey) return false;
+            if (up) HeldShortcutKey = 0;
+            return true;
+        }
         internal void Observe(int key, bool up, bool injected)
         {
             if (injected || Modifier(key) == 0) return;
@@ -107,8 +117,10 @@ namespace ScreenOffTray
         } }
         internal bool Matches(HotkeyBinding binding, int key, bool up, bool injected, uint actualModifiers)
         {
-            return !up && binding != null && binding.Matches(actualModifiers, key, injected) &&
-                PhysicalModifiers == binding.Modifiers;
+            if (up || injected || binding == null || key != binding.Key || HeldShortcutKey != 0) return false;
+            // Recover from a missed modifier release. Only hook-observed presses can supply a modifier.
+            heldModifiers.RemoveWhere(code => (Modifier(code) & actualModifiers) == 0);
+            return binding.Matches(actualModifiers, key, false) && PhysicalModifiers == binding.Modifiers;
         }
         private static uint Modifier(int key)
         {

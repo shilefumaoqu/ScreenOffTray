@@ -20,6 +20,7 @@ namespace OledPrototype
         private readonly TransitionDeadline deadline = new TransitionDeadline();
         private readonly RecoveryHandoff handoff = new RecoveryHandoff();
         private readonly SerialDisplayWork displayWork = new SerialDisplayWork();
+        private readonly OffOutputCheck offOutput = new OffOutputCheck();
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private readonly PhysicalActivityClock physicalActivity;
         private uint physicalInputVersion;
@@ -38,7 +39,7 @@ namespace OledPrototype
         private readonly Timer heartbeat = new Timer();
         private Native.HookProc keyboardProc, mouseProc;
         private IntPtr keyboardHook, mouseHook;
-        private bool hotkeyHeld, inputReady, disposed, rescue;
+        private bool inputReady, disposed, rescue;
         private readonly HotkeyRegistration hotkeys;
         private readonly HotkeyInputState hotkeyInput = new HotkeyInputState();
         private readonly bool hooksAvailable;
@@ -53,7 +54,8 @@ namespace OledPrototype
         private readonly Func<bool> displayReady;
         private readonly Func<PlaybackProtectionState> automaticProtection;
         internal event Action Changed;
-        internal Action ManualRequested;
+        internal Func<bool> ShortcutInSettings;
+        internal Action<bool> ManualRequested;
         internal Action PulseObserved;
         internal Action<InputKind,int,bool> PhysicalObserved;
         internal event Action<string> Problem;
@@ -86,7 +88,7 @@ namespace OledPrototype
                     return "运行中 / Running";
             }
         } }
-        private bool HasHeldInput { get { return swallowed.Count != 0 || hotkeyHeld; } }
+        private bool HasHeldInput { get { return swallowed.Count != 0 || hotkeyInput.HeldShortcutKey != 0; } }
 
         internal OledSession() : this(delegate { return true; }) { }
 
@@ -159,6 +161,24 @@ namespace OledPrototype
         internal uint EffectiveIdle(uint systemIdle) { return flow.EffectiveIdle(systemIdle, clock.ElapsedMilliseconds); }
         internal uint PhysicalIdleMilliseconds { get { return physicalActivity.IdleMilliseconds; } }
         internal uint PhysicalInputVersion { get { return physicalInputVersion; } }
+        internal bool VerifiedOff { get { return flow.Phase == SessionPhase.Off && offOutput.Armed; } }
+        private bool CanObserveOff { get {
+            return VerifiedOff && gate.Phase == GatePhase.Armed && !flow.EndRequested &&
+                !rescue && !recoveryUnavailable && guardian != null && guardian.IsAlive;
+        } }
+
+        internal void RequestOffOutputCheck()
+        {
+            if (flow.Phase == SessionPhase.SwitchingOff || VerifiedOff) offOutput.CheckSoon(clock.ElapsedMilliseconds);
+        }
+
+        internal OffOutputReading? PollOffOutput()
+        {
+            if (flow.Phase == SessionPhase.SwitchingOff && !rescue && !recoveryUnavailable) return null;
+            if (!VerifiedOff || flow.EndRequested || rescue || recoveryUnavailable) offOutput.Disarm();
+            if (offOutput.Armed && !CanObserveOff) return null;
+            return offOutput.Poll(clock.ElapsedMilliseconds);
+        }
 
         internal bool TryBegin(bool automatic)
         {
@@ -260,6 +280,7 @@ namespace OledPrototype
                     }
                 }
                 if (!flow.BeginSwitch()) throw new InvalidOperationException("关屏准备已取消。");
+                offOutput.Disarm();
                 transitionTime = clock.ElapsedMilliseconds;
                 gate.StartOff(transitionTime, null);
                 if (Native.SetThreadExecutionState(0x80000003) == 0)
@@ -274,14 +295,19 @@ namespace OledPrototype
                     // Commit on the worker immediately before native work, not while it is still queued.
                     if (!attempt.Commit()) { Post(delegate { CancelPreparation(attempt, null); }); return; }
                     Post(delegate { if (ReferenceEquals(preparation, attempt)) preparation = null; });
-                    try { prepared.TurnOff(); Post(delegate {
-                        if (rescue || operation != displayVersion) return;
-                        deadline.Complete(); flow.MarkOff();
-                        gate.StartOff(clock.ElapsedMilliseconds, null);
-                        Program.Log("virtual_only_configuration_verified; normal_unlimited");
-                        Notify();
-                        if (flow.EndRequested) Wake();
-                    }); } catch (Exception ex) {
+                    try {
+                        prepared.TurnOff();
+                        Func<bool> inspect = prepared.CreateOffObservation();
+                        Post(delegate {
+                            if (rescue || operation != displayVersion) return;
+                            deadline.Complete(); flow.MarkOff();
+                            gate.StartOff(clock.ElapsedMilliseconds, null);
+                            offOutput.Arm(clock.ElapsedMilliseconds, inspect);
+                            Program.Log("virtual_only_configuration_verified; normal_unlimited");
+                            Notify();
+                            if (flow.EndRequested) Wake();
+                        });
+                    } catch (Exception ex) {
                         string message = ex.Message;
                         Post(delegate {
                             if (rescue || operation != displayVersion) return;
@@ -319,6 +345,7 @@ namespace OledPrototype
             if (!attempt.Cancel() && !attempt.Cancelled) return false;
             preparation = null;
             if (flow.Phase == SessionPhase.SwitchingOff) {
+                offOutput.Disarm();
                 ++displayVersion; deadline.Complete(); gate.Cancel();
                 Native.SetThreadExecutionState(0x80000000);
                 StopAndArchive(guardian, ownedRecoverySnapshot, recoveryReaders, guardianReader, true);
@@ -329,6 +356,11 @@ namespace OledPrototype
             if (message != null) Report(message);
             Notify();
             return true;
+        }
+
+        internal bool TryCancelAutomaticOff()
+        {
+            return automaticRequest && preparation != null && CancelPreparation(preparation, null);
         }
 
         internal void RequestEnd(bool exit)
@@ -350,6 +382,7 @@ namespace OledPrototype
 
         private void StartRestore()
         {
+            offOutput.Disarm();
             long operation = ++displayVersion;
             deadline.Start(clock.ElapsedMilliseconds); Notify();
             displayWork.Enqueue(delegate {
@@ -400,7 +433,8 @@ namespace OledPrototype
             else if (!disposed && flow.ReadyToExit && stopBarrier.Pending == 0 && exitNotifications.ShouldRetry(now)) Notify();
             if (!disposed && exitWaitNotice.Observe(flow.ExitRequested, flow.Phase == SessionPhase.Draining, HeldInputCount, now)) {
                 Program.Log("exit_waiting_for_physical_release; held_count=" + HeldInputCount);
-                Report(ExitWaitNotice.Describe(swallowed, hotkeyHeld, Hotkey.Key), false);
+                int heldShortcut = hotkeyInput.HeldShortcutKey;
+                Report(ExitWaitNotice.Describe(swallowed, heldShortcut != 0, heldShortcut), false);
                 Notify();
             }
         }
@@ -582,7 +616,7 @@ namespace OledPrototype
                 if (finished.IsFaulted) Program.Log("snapshot_maintenance_task_failed: " + finished.Exception);
             }, TaskScheduler.Default);
         }
-        private int HeldInputCount { get { return swallowed.Count + (hotkeyHeld ? 1 : 0); } }
+        private int HeldInputCount { get { return swallowed.Count + (hotkeyInput.HeldShortcutKey != 0 ? 1 : 0); } }
         private void Report(string message, bool logMessage = true)
         {
             if (logMessage) Program.Log(message);
@@ -645,12 +679,13 @@ namespace OledPrototype
                 }
                 hotkeyInput.Observe((int)e.vkCode, up, injected);
                 ObservePhysicalActivity(up ? InputKind.KeyUp : InputKind.KeyDown, injected, (int)e.vkCode);
+                if (hotkeyInput.ConsumePairedShortcut((int)e.vkCode, up, injected)) return new IntPtr(1);
                 if (!injected && e.vkCode == Hotkey.Key) {
-                    if (hotkeyHeld) { if (up) hotkeyHeld = false; return new IntPtr(1); }
                     if (Supported && inputReady && !hotkeys.Changing && gate.CanStartHotkey(Hotkey.Key) &&
                         hotkeyInput.Matches(Hotkey, (int)e.vkCode, up, injected, CurrentModifiers())) {
-                        hotkeyHeld = true;
-                        BeginInvoke(new Action(delegate { if(ManualRequested!=null) ManualRequested(); else TryBegin(false); })); return new IntPtr(1);
+                        bool inSettings = ShortcutInSettings != null && ShortcutInSettings();
+                        hotkeyInput.HoldShortcut((int)e.vkCode);
+                        BeginInvoke(new Action(delegate { if(ManualRequested!=null) ManualRequested(inSettings); else TryBegin(false); })); return new IntPtr(1);
                     }
                 }
                 return Decide(up ? InputKind.KeyUp : InputKind.KeyDown, (int)e.vkCode, injected, keyboardHook, code, w, l);
@@ -697,7 +732,7 @@ namespace OledPrototype
         {
             if (disposing && !disposed) {
                 if (flow.Busy) throw new InvalidOperationException("必须先完成显示恢复及输入配对释放再销毁会话。");
-                disposed = true; heartbeat.Stop(); heartbeat.Dispose(); ReleaseHooks();
+                disposed = true; offOutput.Disarm(); heartbeat.Stop(); heartbeat.Dispose(); ReleaseHooks();
                 Native.SetThreadExecutionState(0x80000000);
             }
             base.Dispose(disposing);

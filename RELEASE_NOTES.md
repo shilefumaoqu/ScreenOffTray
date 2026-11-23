@@ -1,3 +1,10 @@
+# ScreenOffTray 0.2.8
+
+- 改进快捷键稳定性。设置窗口留在后台时仍可用，关屏请求被拦下时提示原因。
+- 托盘设置可在关屏和恢复期间打开。关屏后定期只读复查，确认实体屏意外恢复输出时保留提示窗。安全恢复后满 30 秒无人操作，且通过安全检查，才尝试重新关屏一次。
+- Improved hotkey reliability and access to Settings during screen-off and recovery. An unexpected display output notice stays open, and a safe retry can follow 30 seconds without physical input.
+- 单实体屏实机候选通过实体快捷键、关屏状态下设置窗口呈现、意外亮屏提示及自动重关验证。见[验证记录](docs/版本验证.md)。
+
 # ScreenOffTray 0.2.7
 
 - Rust 接管 Windows 播放器状态读取。音频轮询仍为 5 秒，播放保护、暂停过滤和读取失败后的音频判断沿用原规则。

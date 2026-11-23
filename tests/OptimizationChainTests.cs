@@ -47,6 +47,67 @@ namespace ScreenOffTray.Tests
 #endif
             }
         }
+
+#if !BASELINE
+        private static void UnexpectedOutput()
+        {
+            TaskCompletionSource<bool> current = null;
+            int reads = 0;
+            var check = new OffOutputCheck(query => { reads++; current = new TaskCompletionSource<bool>(); return current.Task; });
+            check.Arm(0, () => true);
+            Check(check.Poll(OffOutputCheck.Interval - 1) == null && reads == 0, "verified off waits 30 minutes for its scheduled check");
+            long now = OffOutputCheck.Interval;
+            check.Poll(now);
+            long deadline = now + OffOutputCheck.QueryLimit;
+            Check(reads == 1 && check.Poll(deadline) == OffOutputReading.Unknown, "stalled output check is treated as unknown");
+            check.CheckSoon(deadline + 1); check.Poll(deadline + 1);
+            Check(reads == 1, "a new display event does not replace an occupied read");
+            check.Disarm();
+            check.Arm(deadline + 1, () => true);
+            current.SetResult(true);
+            Check(check.Poll(deadline + 2) == null, "late result from a previous off session has no effect");
+            now = deadline + 3;
+            check.CheckSoon(now); check.CheckSoon(now); check.Poll(now);
+            Check(reads == 2, "display events coalesce into one early read");
+            current.SetResult(true); check.CheckSoon(++now);
+            Check(check.Poll(now) == null && reads == 3, "a newer topology event supersedes an unconsumed result");
+            current.SetResult(true);
+            Check(check.Poll(now + 1) == OffOutputReading.PhysicalActive && check.Poll(now + 2) == null, "confirmed physical output is returned once");
+            check.CheckSoon(now + 3); check.Poll(now + 3);
+            current.SetException(new InvalidOperationException("test query failed"));
+            Check(check.Poll(now + 4) == OffOutputReading.Unknown, "read failure cannot report unexpected output");
+            check.Disarm();
+            check.CheckSoon(now + 5);
+            check.Arm(now + 6, () => true);
+            check.Poll(now + 6);
+            current.SetResult(true);
+            Check(reads == 5 && check.Poll(now + 7) == OffOutputReading.PhysicalActive, "display event during switching is checked after off confirmation");
+            check.Disarm();
+            check.CheckSoon(now + 8);
+            check.Disarm();
+            check.Arm(now + 9, () => true);
+            check.Poll(now + 9);
+            Check(reads == 5, "cancelled switch does not arm a check for the next session");
+
+            var retry = new UnexpectedDisplayRetry();
+            Check(retry.Poll(90000, 1, true, true, false) == DisplayRetryAction.None, "ordinary wake never arms automatic retry");
+            retry.Arm(0, 7);
+            Check(retry.Poll(4000, 7, false, false, false) == DisplayRetryAction.None, "countdown waits for restoration and guard release");
+            Check(retry.Poll(6000, 7, true, false, true) == DisplayRetryAction.CountingDown, "countdown starts after recovery");
+            Check(retry.Poll(35999, 7, true, true, false) == DisplayRetryAction.None, "quiet period is at least 30 seconds from recovery");
+            Check(retry.Poll(36000, 7, true, false, true) == DisplayRetryAction.None, "pending readiness check receives a bounded wait");
+            Check(retry.Poll(36100, 7, true, true, false) == DisplayRetryAction.Retry && !retry.Pending, "safe retry is requested once");
+            Check(retry.Poll(36200, 7, true, true, false) == DisplayRetryAction.None, "finished retry does not repeat");
+            retry.Arm(0, 7); retry.Poll(0, 7, true, true, false);
+            Check(retry.Poll(30000, 8, true, true, false) == DisplayRetryAction.Cancelled && !retry.Pending, "new physical input wins even at the retry boundary");
+            retry.Arm(0, 7); retry.Poll(0, 7, true, true, false);
+            Check(retry.Poll(33000, 7, true, true, false) == DisplayRetryAction.Unavailable, "late verified readiness cannot trigger retry");
+            retry.Arm(0, 7); retry.Cancel();
+            Check(retry.Poll(30000, 7, true, true, false) == DisplayRetryAction.None, "manual dismissal or opening Settings cancels the pending retry");
+        }
+
+#endif
+
         private static void Requests()
         {
             var classified=new ManualOffRequest(()=>0);
@@ -115,6 +176,19 @@ namespace ScreenOffTray.Tests
         private static void Hotkeys()
         {
             var native=new Registrar{Reject=true};string error;
+            var input = new HotkeyInputState();
+            HotkeyBinding ctrl;
+            HotkeyBinding.TryParse("Ctrl+N", out ctrl, out error);
+            input.Observe(0xA2, false, false);
+            input.Observe(0xA4, false, false);
+            Check(input.Matches(ctrl, 'N', false, false, 2), "a stale observed Alt hold no longer blocks the actual Ctrl shortcut");
+            Check(!input.Matches(ctrl, 'N', false, false, 3), "real or injected extra modifier still blocks an exact match");
+            Check(!input.Matches(ctrl, 'N', false, true, 2), "injected shortcut stays ineligible");
+            input.HoldShortcut('N');
+            Check(!input.ConsumePairedShortcut('N', true, true) && input.HeldShortcutKey == 'N', "injected up cannot release a held physical shortcut");
+            Check(!input.ConsumePairedShortcut('M', false, false), "pairing remains bound to the key originally consumed");
+            Check(input.ConsumePairedShortcut('N', true, false) && input.HeldShortcutKey == 0, "original release ends pairing even if shortcut settings have changed");
+            Check(!new HotkeyInputState().Matches(ctrl, 'N', false, false, 2), "async modifier state alone cannot supply physical proof");
             using(var keys=new HotkeyRegistration(native,HotkeyBinding.Default)) {
                 Check(!keys.Initialize(out error) && !keys.Registered,"initial occupied shortcut remains unregistered");native.Reject=false;
                 HotkeyRegistration.Reservation ticket;
@@ -160,7 +234,7 @@ namespace ScreenOffTray.Tests
         {
             try { Queries(); Requests();
 #if !BASELINE
-                MediaRetry();ExitBarrier(); Writer(); Hotkeys();
+                MediaRetry();ExitBarrier(); Writer(); Hotkeys(); UnexpectedOutput();
                 var source=new AudioSnapshot{Known=true,Sources=new[]{new AudioSource{ExePath=@"C:\app.exe",DisplayName="App",ProcessIds=new[]{42}}}};
                 var options=new PlaybackOptions{WhitelistPaths=new[]{@"C:\app.exe"}};
                 var snapshot=new RuntimeSnapshot(7,"ready",true,false,false,source,options,new AutoOffTimingResult(0,AutoOffPauseReason.None),12,"");

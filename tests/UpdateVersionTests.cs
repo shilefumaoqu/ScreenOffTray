@@ -43,6 +43,8 @@ namespace ScreenOffTray.Tests {
             Test("0.2.4","v0.2.4",UpdateCheckStatus.UpToDate);
             Test("0.2.4","v0.2.5",UpdateCheckStatus.Available);
             Test("0.2.5","v0.2.4",UpdateCheckStatus.UpToDate);
+            Test("0.2.7","v0.2.8",UpdateCheckStatus.Available);
+            Test("0.2.8","v0.2.8",UpdateCheckStatus.UpToDate);
             Test("0.2.5","v0.2.5",UpdateCheckStatus.UpToDate);
             Test("0.2.4.0","v0.2.5.0",UpdateCheckStatus.Available);
             Test("0.2.5","v0.2.6",UpdateCheckStatus.Available);
@@ -66,7 +68,7 @@ namespace ScreenOffTray.Tests {
                 if(checker.CheckAsync(CancellationToken.None).Result.Status!=UpdateCheckStatus.NotConfigured || field.GetValue(checker)!=null)throw new Exception("Blank update source created HTTP client");
             }
             if(unused.Disposals!=1)throw new Exception("Unconsumed handler ownership was not released once");
-            Console.WriteLine("PASS 32 actual update-parser and installer-asset checks; fake HTTP only"); return 0;
+            Console.WriteLine("PASS update-parser and installer-asset checks, including 0.2.7 to 0.2.8; fake HTTP only"); return 0;
             } catch(Exception error) { Console.WriteLine(error.GetType().FullName); Console.WriteLine(error.Message); return 1; }
         }
         private static void Test(string current,string tag,UpdateCheckStatus expected) {

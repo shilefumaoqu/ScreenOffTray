@@ -22,7 +22,7 @@ namespace ScreenOffTray.Tests {
   }
   sealed class Scene:IAutoSetupPlatform,IAutoSetupRecoveryCompletion {
    internal readonly Clock Clock=new Clock();internal readonly Guard Guard=new Guard();
-   internal readonly AutoSetupPlan Plan;internal DisplayBackend.Snapshot Current;
+   internal readonly AutoSetupPlan Plan;internal readonly DisplayBackend.Plan VirtualOnly;internal DisplayBackend.Snapshot Current;
    internal readonly List<string> Events=new List<string>();
    internal int Applies,Probes,Archives,Rollbacks,Saves;internal string Recorded;
    internal bool SaveOk=true,CommitOk=true;
@@ -36,7 +36,8 @@ namespace ScreenOffTray.Tests {
      new DisplayBackend.ModeInfo{InfoType=2,Id=1,Adapter=physical.Target.Adapter}},DevicePaths=new[]{"physical"},AdapterPaths=new[]{"physical-adapter"}};
     var virtualPath=new DisplayBackend.PathInfo{Flags=1};virtualPath.Source.Adapter.Low=20;virtualPath.Source.Id=1;
     virtualPath.Target.Adapter.Low=20;virtualPath.Target.Id=2;virtualPath.Target.ModeIndex=DisplayBackend.Invalid;virtualPath.Target.Technology=17;virtualPath.Target.Rotation=1;virtualPath.Target.Scaling=1;virtualPath.Target.Available=1;
-    Plan=DisplayAutoCcd.Build(original,new DisplayBackend.Plan{Paths=new[]{virtualPath},Modes=new[]{new DisplayBackend.ModeInfo{InfoType=1,Id=1,Adapter=virtualPath.Source.Adapter,Source=original.Modes[0].Source}},DevicePath="virtual",AdapterPath="virtual-adapter"});
+    VirtualOnly=new DisplayBackend.Plan{Paths=new[]{virtualPath},Modes=new[]{new DisplayBackend.ModeInfo{InfoType=1,Id=1,Adapter=virtualPath.Source.Adapter,Source=original.Modes[0].Source}},DevicePath="virtual",AdapterPath="virtual-adapter"};
+    Plan=DisplayAutoCcd.Build(original,VirtualOnly);
     Current=original;
    }
    public AutoSetupPlan PlanCheck(){return Plan;}
@@ -82,6 +83,14 @@ namespace ScreenOffTray.Tests {
   }
   static int Main(){try{
    Check(DisplaySetupState.CreateDefaultAutoPlatform() is DpiMatchedAutoSetup,"actual production factory selects the preparation-only DPI adapter without starting product Main");
+   var output=new Scene();
+   Check(DisplayBackend.HasOriginalPhysicalOutput(output.Plan.Original,output.VirtualOnly,output.Current),"physical-only output matches the original physical display");
+   var onlyVirtual=new DisplayBackend.Snapshot{Paths=output.VirtualOnly.Paths,Modes=output.VirtualOnly.Modes,DevicePaths=new[]{"virtual"},AdapterPaths=new[]{"virtual-adapter"}};
+   Check(!DisplayBackend.HasOriginalPhysicalOutput(output.Plan.Original,output.VirtualOnly,onlyVirtual),"expected virtual-only output is not an unexpected wake");
+   var both=output.Plan.Extended;
+   Check(DisplayBackend.HasOriginalPhysicalOutput(output.Plan.Original,output.VirtualOnly,both),"the original physical display is recognized with the expected virtual display");
+   var replaced=new DisplayBackend.Snapshot{Paths=both.Paths,Modes=both.Modes,DevicePaths=new[]{"another-physical","virtual"},AdapterPaths=both.AdapterPaths};
+   Check(!DisplayBackend.HasOriginalPhysicalOutput(output.Plan.Original,output.VirtualOnly,replaced),"a different device with reused target id cannot trigger automatic retry");
    var readOnly=new Scene();int factories=0;var readOnlyAdapter=new DpiMatchedAutoSetup(readOnly,gate=>{factories++;throw new Exception("Read-only probe must not create a write-capable platform");});
    readOnlyAdapter.Probe();readOnlyAdapter.Probe();Check(factories==0 && readOnly.Applies==0,"ordinary Probe remains read-only and never creates DPI write capability");
    Dpi dpi;var good=new Scene();var result=Run(good,(d,a)=>d.FirstReadDelay=3200,out dpi);

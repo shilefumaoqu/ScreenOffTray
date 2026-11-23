@@ -31,12 +31,12 @@ namespace ScreenOffTray
         private void ObserveSetupPresentation()
         {
             if(_settingsHost!=null) {
-                if(_uiShown && _setup.HasSettledResult){_setupPrompts.AcknowledgeVisibleState(_setup.IsReady,SetupPromptPolicy.AttentionKey(_setup.Result,_setup.LastPreparationError));SavePromptHistory();}
+                if(_migrationDone && _uiShown && _setup.HasSettledResult){_setupPrompts.AcknowledgeVisibleState(_setup.IsReady,SetupPromptPolicy.AttentionKey(_setup.Result,_setup.LastPreparationError));SavePromptHistory();}
                 return;
             }
             if(_initialSetupRequested){QueueInitialSetup();return;}
             var notice=_setupPrompts.Observe(_setup.HasSettledResult,_setup.IsReady,
-                !_migrationDone || _session.IsBusy || _hotkeyEditing || _exiting || _noticeAwaitingPresentation,
+                !_migrationDone || _session.IsBusy || SettingsOpen || _exiting || _noticeAwaitingPresentation,
                 SetupPromptPolicy.AttentionKey(_setup.Result,_setup.LastPreparationError));
             if(notice==SetupNotice.Introduction || notice==SetupNotice.Attention){_noticeAwaitingPresentation=true;_initialSetupRequested=true;QueueInitialSetup();}
             else SavePromptHistory();
@@ -50,11 +50,12 @@ namespace ScreenOffTray
         private void ShowInitialSetup(){ShowSettings();}
         private void ShowSettings()
         {
-            if(_exiting || _session.IsBusy || (!_migrationDone && _migrationChoices==null && _settingsFailure==null))return;
+            if(_exiting)return;
+            CancelDisplayRetry("已打开设置，本次自动重关已取消。", "Settings was opened. Automatic screen-off for this incident was cancelled.");
             if(_settingsHost!=null){_settingsHost.Activate();return;}
             SettingsPipeHost host=null;
             host=new SettingsPipeHost(PostSetupCompletion,HandleUiCommand,delegate{UiShown(host);},delegate{UiExited(host);});
-            _settingsHost=host;_hotkeyEditing=true;_uiShown=false;_uiFailure=null;_initialSetupRequested=false;
+            _settingsHost=host;_uiShown=false;_uiFailure=null;_initialSetupRequested=false;
             _session.SettingsKey+=ObserveSettingsKey;
             try {
                 host.Start(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"ScreenOffTray.Settings.exe"),_text.English?"en":"zh-CN");
@@ -68,19 +69,25 @@ namespace ScreenOffTray
         private void UiShown(SettingsPipeHost host)
         {
             if(!Object.ReferenceEquals(host,_settingsHost) || _uiShown)return;
-            _uiShown=true;_noticeAwaitingPresentation=false;_setupPrompts.MarkIntroductionShown();
-            if(_setup.HasSettledResult)_setupPrompts.AcknowledgeVisibleState(_setup.IsReady,SetupPromptPolicy.AttentionKey(_setup.Result,_setup.LastPreparationError));
-            SavePromptHistory();UpdateMenuState();
+            _uiShown=true;_noticeAwaitingPresentation=false;
+            if (_migrationDone && !_session.IsBusy) {
+                _setupPrompts.MarkIntroductionShown();
+                if(_setup.HasSettledResult)_setupPrompts.AcknowledgeVisibleState(_setup.IsReady,SetupPromptPolicy.AttentionKey(_setup.Result,_setup.LastPreparationError));
+                SavePromptHistory();
+            }
+            UpdateMenuState();
         }
         private void UiExited(SettingsPipeHost host)
         {
             if(!Object.ReferenceEquals(host,_settingsHost))return;
-            _settingsHost=null;_uiShown=false;_hotkeyEditing=false;_session.SettingsKey-=ObserveSettingsKey;
+            _settingsHost=null;_uiShown=false;_session.SettingsKey-=ObserveSettingsKey;
             host.Dispose();
-            if(_setup.Preparing)_setup.CancelPreparation();
+            if(_setup.Preparing){_explicitPreparation=false;_setup.CancelPreparation();}
             if(_exiting){ContinueExit();return;}
-            if(_setup.HasSettledResult)_setupPrompts.AcknowledgeVisibleState(_setup.IsReady,SetupPromptPolicy.AttentionKey(_setup.Result,_setup.LastPreparationError));
-            else _setupPrompts.DeferPendingCheck();
+            if (_migrationDone && !_session.IsBusy) {
+                if(_setup.HasSettledResult)_setupPrompts.AcknowledgeVisibleState(_setup.IsReady,SetupPromptPolicy.AttentionKey(_setup.Result,_setup.LastPreparationError));
+                else _setupPrompts.DeferPendingCheck();
+            }
             UpdateMenuState();
         }
         private void ObserveSettingsKey(int key,uint modifiers,bool up)
@@ -93,7 +100,8 @@ namespace ScreenOffTray
         private ViewState CreateUiState()
         {
             var panel=ReadPlaybackPanel();
-            bool ready=_setup.HasVerifiedProfile && _displayOffSupported && _settingsFailure==null && _migrationDone;
+            bool ready=_setup.HasVerifiedProfile && _displayOffSupported && _settingsFailure==null && _migrationDone && _session.CanStartSession;
+            bool loading=!_migrationDone && _migrationChoices==null && _settingsFailure==null;
             string[] whitelist=panel.AppliedOptions==null || panel.AppliedOptions.WhitelistPaths==null?new string[0]:(string[])panel.AppliedOptions.WhitelistPaths.Clone();
             bool playbackBlocks=panel.Timing.PauseReason==AutoOffPauseReason.Playback;
             string theme;
@@ -101,14 +109,17 @@ namespace ScreenOffTray
             catch { theme="system"; }
             Func<bool,string> heading=en=>_settingsFailure!=null?(en?"Settings need attention":"设置需要处理"):
                 _migrationChoices!=null?(en?"Choose previous settings":"请选择旧设置"):
+                loading?(en?"Loading settings…":"正在读取设置…"):
+                !_session.CanStartSession?LocalizeSession(_session.StateText,en):
                 !_displayOffSupported?(en?"Display off unavailable":"关屏暂不可用"):
                 _setup.Preparing?(en?"Preparing displays…":"正在准备显示…"):
                 ready?(_setup.Checking?(en?"✓ Ready · refreshing":"✓ 显示已就绪 · 复检中"):(en?"✓ Display ready":"✓ 显示已就绪")):
                 _setup.Checking?(en?"Checking displays…":"正在核验显示…"):(en?"Display off is not enabled":"关屏未启用");
-            Func<bool,string> detail=en=>_settingsFailure!=null?_settingsFailure:!_displayOffSupported?LocalizeSession(_displayOffUnavailableReason,en):SetupDetail(en);
+            Func<bool,string> detail=en=>_settingsFailure!=null?_settingsFailure:!_displayOffSupported?LocalizeSession(_displayOffUnavailableReason,en):
+                !_session.CanStartSession || loading?heading(en):SetupDetail(en);
             return new ViewState{
                 Version=_snapshotVersion,StatusZh=heading(false),StatusEn=heading(true),Ready=ready,Checking=_setup.Checking,Preparing=_setup.Preparing,
-                CanPrepare=_migrationDone && !_session.IsBusy && !_exiting && !_savingSettings && !_updateApplying && _settingsFailure==null && !_setup.HasVerifiedProfile && _setup.CanPrepareDisplay,
+                CanPrepare=_migrationDone && _session.CanStartSession && !_exiting && !_savingSettings && !_savingWhitelist && !_updateApplying && _settingsFailure==null && !_setup.HasVerifiedProfile && _setup.CanPrepareDisplay,
                 CanClose=!_savingSettings && !_setup.Preparing && !_updateApplying,Saving=_savingSettings || _updateApplying,SavingWhitelist=_savingWhitelist,
                 DetailZh=detail(false),DetailEn=detail(true),Diagnostics=String.Join("\r\n",new[]{_setup.Diagnostics,panel.SettingsWarning,panel.Audio!=null && !panel.Audio.Known?panel.Audio.Error:null,_uiFailure}).Trim(),
                 ProtectionZh=panel.Timing.Blocked || panel.Timing.PlaybackLimitReached?AutoOffStatusText.Format(panel.Timing,_timeoutMinutes,false):"",
@@ -123,7 +134,7 @@ namespace ScreenOffTray
                 Whitelist=whitelist,MigrationChoices=_migrationChoices==null?new int[0]:(int[])_migrationChoices.Clone(),
                 UpdateZh=UpdateText(false),UpdateEn=UpdateText(true),UpdateAvailable=_updateResult!=null && _updateResult.Status==UpdateCheckStatus.Available,
                 UpdateCanDownload=_updateResult!=null && _updateResult.CanDownload,UpdatePhase=_updateChecking?"checking":_updatePhase,UpdatePercent=_downloadPercent,
-                Applied=new FormValues{Minutes=_timeoutMinutes,Hotkey=_session.Hotkey.Serialize(),Language=_text.English?"en":"zh-CN",Startup=_startupEnabled,
+                Applied=loading?null:new FormValues{Minutes=_timeoutMinutes,Hotkey=_session.Hotkey.Serialize(),Language=_text.English?"en":"zh-CN",Startup=_startupEnabled,
                     AutomaticUpdates=_autoUpdatesEnabled,LimitEnabled=_playbackOptions.PlaybackLimitEnabled,LimitMinutes=_playbackOptions.PlaybackLimitMinutes,
                     InterfaceTheme=theme}
             };
@@ -156,8 +167,8 @@ namespace ScreenOffTray
                         try{await Task.Run(delegate{SettingsMigration.Finish(request.Values.Minutes);});_migrationChoices=null;_timeoutMinutes=LoadTimeoutMinutes();_migrationDone=true;if(!_exiting)_setup.Recheck();}
                         finally{_savingSettings=false;if(_exiting)ContinueExit();}break;
                     case "prepare":if(!StartAutomaticSetup())error="当前不能开始显示准备，请重新核对状态 / Display preparation could not start; check the current state";break;
-                    case "cancelPrepare":_setup.CancelPreparation();break;
-                    case "recheck":if(!_setup.Preparing && !_session.IsBusy)_setup.Recheck();else error="Display operation is busy";break;
+                    case "cancelPrepare":_explicitPreparation=false;_setup.CancelPreparation();break;
+                    case "recheck":if(_migrationDone && !_setup.Preparing && _session.CanStartSession)_setup.Recheck();else error="显示操作尚未完成，请稍后复检。 / Wait for display work to finish before checking again.";break;
                     case "refresh":_audioMonitor.RequestRefresh();break;
                     case "checkUpdate":if(_updateResult!=null && _updateResult.Status==UpdateCheckStatus.Available)DownloadUpdate();else CheckForUpdates(false);break;
                     case "cancelUpdate":CancelDownload();break;
@@ -198,14 +209,14 @@ namespace ScreenOffTray
         }
         private void QueueExitPromptHistory()
         {
-            if(_noticeAwaitingPresentation && !_setup.IsReady)return;
+            if(!_migrationDone || (_noticeAwaitingPresentation && !_setup.IsReady))return;
             bool shown=_setupPrompts.IntroShown;string key=_setupPrompts.LastNoticeKey;
             SerializedSettingsWriter.Default.UpdateAsync(delegate{Settings.Default.SetupIntroShown=shown;Settings.Default.SetupLastNoticeKey=key;})
                 .ContinueWith(task=>OledPrototype.Program.Log("exit_prompt_history_failed: "+task.Exception),System.Threading.CancellationToken.None,TaskContinuationOptions.OnlyOnFaulted,TaskScheduler.Default);
         }
         private async void SavePromptHistory()
         {
-            if(_savingPromptHistory || (_noticeAwaitingPresentation && !_setup.IsReady))return;
+            if(!_migrationDone || _savingPromptHistory || (_noticeAwaitingPresentation && !_setup.IsReady))return;
             bool shown=_setupPrompts.IntroShown;string key=_setupPrompts.LastNoticeKey;_savingPromptHistory=true;
             try{await SerializedSettingsWriter.Default.UpdateAsync(delegate{Settings.Default.SetupIntroShown=shown;Settings.Default.SetupLastNoticeKey=key;});}
             catch(Exception ex){if(!_historySaveWarning){_historySaveWarning=true;OledPrototype.Program.Log("setup_prompt_history_save_failed: "+ex.Message);}}

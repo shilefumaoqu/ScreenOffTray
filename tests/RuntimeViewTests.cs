@@ -25,6 +25,7 @@ namespace ScreenOffTray.Tests
             try {
                 session=(OledSession)FormatterServices.GetUninitializedObject(typeof(OledSession));
                 Set(session,"flow",new SessionFlow());Set(session,"hotkeys",new HotkeyRegistration(new Registrar(),HotkeyBinding.Default));
+                Set(session,"stopBarrier",new RecoveryStopBarrier());
                 typeof(OledSession).GetProperty("Supported",Fields).GetSetMethod(true).Invoke(session,new object[]{true});
                 var root=(TrayApplicationContext)FormatterServices.GetUninitializedObject(typeof(TrayApplicationContext));
                 using(var setup=new DisplaySetupState(a=>{throw new Exception("No native work permitted");},new Evidence(),()=>{throw new Exception();},()=>{throw new Exception();},new Clock(),new Scheduler()))
@@ -50,12 +51,51 @@ namespace ScreenOffTray.Tests
                     Set(root,"_savingSettings",true);Check(!((ViewState)export.Invoke(root,null)).CanClose,"pending settings transaction keeps close gate");Set(root,"_savingSettings",false);
                     Packet result=null;typeof(TrayApplicationContext).GetMethod("HandleUiCommand",Fields).Invoke(root,new object[]{new Packet{Kind="arbitrary-path-operation"},new Action<Packet>(p=>result=p)});
                     Check(result!=null && result.Code=="unsupported_command","unknown command cannot execute an arbitrary operation");
+                    Set(root,"_migrationDone",false);
+                    var loading=(ViewState)export.Invoke(root,null);
+                    Check(loading.Applied==null && loading.CanClose && !loading.CanPrepare,"Settings opens while loading without an editable stale draft");
+                    Set(root,"_migrationDone",true);
+                    var flow=(SessionFlow)typeof(OledSession).GetField("flow",Fields).GetValue(session);
+                    flow.TryBegin(true,false,false);flow.BeginSwitch();flow.MarkOff();flow.BeginRestore();
+                    var restoring=(ViewState)export.Invoke(root,null);
+                    Check(restoring.StatusEn=="Restoring" && !restoring.Ready && !restoring.CanPrepare,"Settings shows real recovery state and protects display writes");
+                    var retry=new UnexpectedDisplayRetry();
+                    Set(root,"_displayRetry",retry);Set(root,"_autoClock",System.Diagnostics.Stopwatch.StartNew());
+                    var schedule=typeof(TrayApplicationContext).GetMethod("ScheduleDisplayRetry",Fields);
+                    Set(root,"_paused",true);schedule.Invoke(root,new object[]{7u});
+                    Check(!retry.Pending,"a manually turned-off display does not schedule automatic retry while paused");
+                    Set(root,"_paused",false);schedule.Invoke(root,new object[]{7u});
+                    Check(retry.Pending,"unpaused unexpected output can schedule retry");
+                    retry.Cancel();
                     using(var first=new SettingsPipeHost(a=>a(),(p,c)=>c(new Packet()),delegate{},delegate{},delegate{}))
                     using(var other=new SettingsPipeHost(a=>a(),(p,c)=>c(new Packet()),delegate{},delegate{},delegate{})) {
-                        Set(root,"_settingsHost",first);Set(root,"_hotkeyEditing",true);
+                        Set(root,"_settingsHost",first);
+                        schedule.Invoke(root,new object[]{7u});
+                        Check(!retry.Pending,"an existing Settings editor pauses automatic retry before countdown");
+                        typeof(TrayApplicationContext).GetMethod("ShowSettings",Fields).Invoke(root,null);
+                        var replies=(System.Collections.Generic.Queue<Packet>)typeof(SettingsPipeHost).GetField("replies",Fields).GetValue(first);
+                        Check(replies.Dequeue().Kind=="activate","settings activation goes through while display recovery owns the session");
+                        flow.Complete(0,false);flow.TryBegin(true,false);
+                        var retryAttempt=new PreparationAttempt(1,0,true);
+                        Set(session,"automaticRequest",true);Set(session,"preparation",retryAttempt);
+                        Set(session,"clock",System.Diagnostics.Stopwatch.StartNew());
+                        Set(session,"swallowed",new System.Collections.Generic.HashSet<int>());
+                        Set(session,"hotkeyInput",new HotkeyInputState());
+                        Set(session,"exitNotifications",new ExitNotifications());
+                        Set(root,"_retryOffSession",true);
+                        typeof(TrayApplicationContext).GetMethod("ShowSettings",Fields).Invoke(root,null);
+                        Check(replies.Dequeue().Kind=="activate" && !flow.Busy && retryAttempt.Cancelled && !retryAttempt.Commit(),
+                            "opening Settings without physical input cancels a dispatched but uncommitted retry");
+                        flow.TryBegin(true,false);flow.BeginSwitch();
+                        var committedAttempt=new PreparationAttempt(2,0,true);committedAttempt.Commit();
+                        Set(session,"preparation",committedAttempt);Set(root,"_retryOffSession",true);
+                        typeof(TrayApplicationContext).GetMethod("ShowSettings",Fields).Invoke(root,null);
+                        Check(replies.Dequeue().Kind=="activate" && flow.Phase==SessionPhase.SwitchingOff && !committedAttempt.Cancelled,
+                            "Settings opens without interfering with an already committed display switch");
                         var exit=typeof(TrayApplicationContext).GetMethod("UiExited",Fields);exit.Invoke(root,new object[]{other});
-                        Check((bool)root.GetType().GetField("_hotkeyEditing",Fields).GetValue(root),"late exit from another UI cannot release current editor gate");
-                        exit.Invoke(root,new object[]{first});Check(!(bool)root.GetType().GetField("_hotkeyEditing",Fields).GetValue(root),"actual matching UI exit releases editor gate");
+                        var hostField=root.GetType().GetField("_settingsHost",Fields);
+                        Check(Object.ReferenceEquals(hostField.GetValue(root),first),"late exit from another UI cannot release current editor gate");
+                        exit.Invoke(root,new object[]{first});Check(hostField.GetValue(root)==null,"actual matching UI exit releases editor gate");
                     }
                     GC.SuppressFinalize(root);
                 }

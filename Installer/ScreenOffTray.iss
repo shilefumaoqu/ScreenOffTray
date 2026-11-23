@@ -4,7 +4,7 @@
 #endif
 
 #ifndef ReleaseVersion
-#define ReleaseVersion "0.2.7"
+#define ReleaseVersion "0.2.8"
 #endif
 #ifndef RollbackOnly
 #define RollbackOnly "0"
@@ -160,8 +160,8 @@ begin
     if not GetVersionNumbers(AddBackslash(WizardDirValue)+'ScreenOffTray.exe',VersionMS,VersionLS) then begin
       Result := '无法核实旧程序版本，已停止升级。'; Exit;
     end;
-    { Numeric file version 0.2.7.0; the separate rollback package explicitly permits downgrade. }
-    if (VersionMS > 2) or ((VersionMS = 2) and (VersionLS > 458752)) then begin
+    { Numeric file version 0.2.8.0. }
+    if (VersionMS > 2) or ((VersionMS = 2) and (VersionLS > 524288)) then begin
       Result := '已安装版本更高，请使用对应版本安装包。'; Exit;
     end;
   end;
@@ -208,7 +208,7 @@ begin
 #if RollbackOnly == "1"
   Result := (HighVersion = 2) and (LowVersion = 393216);
 #else
-  Result := (HighVersion = 2) and (LowVersion = 458752);
+  Result := (HighVersion = 2) and (LowVersion = 524288);
 #endif
 end;
 
