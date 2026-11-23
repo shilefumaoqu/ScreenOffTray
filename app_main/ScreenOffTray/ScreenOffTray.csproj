@@ -46,6 +46,7 @@
     <Compile Include="..\..\app_request\ScreenOffTray\Program.cs" />
     <Compile Include="..\..\app_request\ScreenOffTray\VerifiedLaunch.cs" />
     <Compile Include="TrayApplicationContext.cs" />
+    <Compile Include="TrayOffSafety.cs" />
     <Compile Include="SettingsUiBridge.cs" />
     <Compile Include="SettingsValues.cs" />
     <Compile Include="..\..\app_request\Settings\SettingsPipeHost.cs" />
@@ -88,6 +89,7 @@
     <Compile Include="Oled\SessionFlow.cs" />
     <Compile Include="Oled\SessionSafety.cs" />
     <Compile Include="Oled\OledSession.cs" />
+    <Compile Include="Oled\OffSafetyChecks.cs" />
     <Compile Include="Oled\RuntimeBridge.cs" />
     <Compile Include="Oled\ExitLifecycle.cs" />
     <Compile Include="Oled\RecoveryTermination.cs" />

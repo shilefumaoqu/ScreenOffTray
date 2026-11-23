@@ -41,10 +41,13 @@ namespace ScreenOffTray
         private UiText _text;
         private bool _initialSetupRequested, _initialSetupQueued;
         private readonly SetupPromptPolicy _setupPrompts;
-        private bool _migrationDone, _hotkeyEditing, _historySaveWarning;
+        private bool _migrationDone, _historySaveWarning;
+        private bool SettingsOpen { get { return _settingsHost != null; } }
         private string _hotkeyLoadWarning;
         private string _settingsFailure;
         private long _nextSetupCheck;
+        private long _lastManualNoticeAt;
+        private string _lastManualNotice;
         private int _timeoutMinutes;
         private bool _paused, _triggeredForIdlePeriod, _keepAwakeRequested, _exiting;
         private uint _lastPhysicalInputVersion;
@@ -79,11 +82,15 @@ namespace ScreenOffTray
             } catch (Exception ex) { _settingsFailure = ex.Message; }
             _setupPrompts = new SetupPromptPolicy(introShown, lastNotice, previouslyPrepared);
             // Cheap gate only. Native readiness work never runs inside the hook.
-            _session = new OledSession(delegate { return _migrationDone && !_exiting && !_savingSettings && !_updateApplying && _settingsFailure==null && !_hotkeyEditing && _setup != null && _setup.IsReady; }, binding, ReadAutomaticProtection);
+            _session = new OledSession(delegate { return _migrationDone && !_exiting && !_savingSettings && !_savingWhitelist && !_updateApplying && _settingsFailure==null && _setup != null && _setup.IsReady; }, binding, ReadAutomaticProtection);
             _setup = new DisplaySetupState(Post, PostSetupCompletion);
             _setup.RecoveryStopConfirmationAvailable += _session.TrackRecoveryStop;
             _session.ManualRequested = TurnOffDisplaysNow;
-            _session.PulseObserved = delegate { if(_exiting)TryFinishExit();else PollManualRequest(); };
+            _session.ShortcutInSettings = IsSettingsForeground;
+            _session.PulseObserved = delegate {
+                if (_exiting) TryFinishExit();
+                else { PollManualRequest(); PollDisplayRetry(); }
+            };
             _session.PhysicalObserved = delegate(InputKind kind,int id,bool injected) {
                 if(_manualOff.Observe(kind,id,injected)) Post(delegate { CompleteManualRequest(OffRequestResult.Cancelled); });
             };
@@ -98,6 +105,7 @@ namespace ScreenOffTray
             SystemEvents.DisplaySettingsChanged += DisplaySettingsChanged;
             _timer = new Timer { Interval = 5000 };
             _timer.Tick += delegate {
+                CheckOffOutput();
                 RefreshAutomaticTiming();
                 if (!_session.IsBusy && !_setup.Preparing && !_exiting && _migrationDone && _autoClock.ElapsedMilliseconds >= _nextSetupCheck) {
                     _nextSetupCheck = _autoClock.ElapsedMilliseconds+15000; _setup.Recheck();
@@ -139,7 +147,7 @@ namespace ScreenOffTray
         private void RebuildMenu()
         {
             var previous = _view;
-            _view = new TrayMenu(_text, TurnOffDisplaysNow, TogglePause, ShowSettings, ExitApplication, 1F);
+            _view = new TrayMenu(_text, delegate { TurnOffDisplaysNow(false); }, TogglePause, ShowSettings, ExitApplication, 1F);
             _view.Menu.Opening += delegate(object sender, System.ComponentModel.CancelEventArgs args) {
                 if (!_session.IsBusy) RefreshAutomaticTiming();
                 if (!_session.IsBusy && !_setup.Preparing && _migrationDone && _autoClock.ElapsedMilliseconds >= _nextSetupCheck) {
@@ -157,13 +165,17 @@ namespace ScreenOffTray
         {
             _paused = !_paused;
             _autoTiming.ResetCountdown(); RefreshAutomaticTiming();
-            if (_paused) { _session.RequestEnd(false); ReleaseIdlePowerRequest(); }
+            if (_paused) {
+                CancelDisplayRetry("已暂停自动关屏，本次不会重关。", "Automatic screen-off was paused. This incident will not trigger another switch.");
+                _session.RequestEnd(false); ReleaseIdlePowerRequest();
+            }
             UpdateMenuState();
         }
         private void SetupChanged()
         {
             PollManualRequest();
             if (_exiting) { RefreshSettingsPanel(); if (!_setup.Preparing) ContinueExit(); return; }
+            ObserveExplicitPreparation();
             // A refresh temporarily prevents a new session, but does not invalidate
             // an already verified profile or release its existing idle power hold.
             if (!_setup.HasVerifiedProfile) ReleaseIdlePowerRequest();
@@ -176,7 +188,9 @@ namespace ScreenOffTray
         private void DisplaySettingsChanged(object sender, EventArgs e)
         {
             Post(delegate {
-                if (_session.IsBusy || _setup.Preparing || _exiting) return;
+                if (_exiting) return;
+                if (_session.IsBusy) { _session.RequestOffOutputCheck(); return; }
+                if (_setup.Preparing) return;
                 _setup.Invalidate(); if (_migrationDone) _setup.Recheck();
             });
         }
@@ -198,8 +212,16 @@ namespace ScreenOffTray
         private bool StartAutomaticSetup()
         {
             try {
-                if (_savingSettings || _updateApplying || _settingsFailure!=null || _session.IsBusy || _exiting || !_migrationDone || _setup.Preparing) return false;
-                ReleaseIdlePowerRequest();return _setup.PrepareDisplay();
+                if (_savingSettings || _savingWhitelist || _updateApplying || _settingsFailure != null ||
+                    !_session.CanStartSession || _exiting || !_migrationDone || !_setup.CanPrepareDisplay) return false;
+                ReleaseIdlePowerRequest();
+                _explicitPreparation = true;
+                bool started = false;
+                try {
+                    started = _setup.PrepareDisplay();
+                    return started;
+                }
+                finally { if (!started) _explicitPreparation = false; }
             } finally {
                 // A fresh read-only check can reject a start after the button's
                 // snapshot. Always acknowledge the actual state to clear the
@@ -230,16 +252,29 @@ namespace ScreenOffTray
         private void PollManualRequest()
         {
             if(_exiting) { _manualOff.Cancel(); return; }
-            var result=_manualOff.Poll(_migrationDone && _setup.IsReady && !_hotkeyEditing,_setup.Checking,delegate { return TryStartDisplayOffSession(false); });
+            if (!_manualOff.Pending) return;
+            string reason = ManualOffBlockReason();
+            if (reason != null) {
+                _manualOff.Cancel();
+                ExplainManualOff(reason);
+                UpdateMenuState();
+                return;
+            }
+            var result=_manualOff.Poll(_setup.IsReady,_setup.Checking,delegate { return TryStartDisplayOffSession(false); });
             if(result.HasValue) CompleteManualRequest(result.Value);
         }
         private void CompleteManualRequest(OffRequestResult result)
         {
             if(result==OffRequestResult.Accepted) _triggeredForIdlePeriod=true;
-            else if(result==OffRequestResult.Cancelled)
+            else if(result==OffRequestResult.Cancelled) {
+                OledPrototype.Program.Log("manual_off_cancelled; reason=physical_input");
                 _trayIcon.ShowBalloonTip(3000,_text.Title,_text.Pick("关屏已取消：检测到新的实体操作。","Display off cancelled by new physical input."),ToolTipIcon.Info);
-            else if(result==OffRequestResult.TimedOut || result==OffRequestResult.Rejected)
-                _trayIcon.ShowBalloonTip(4000,_text.Title,_text.Pick("关屏未开始：显示核验未完成或当前不可用，请稍后重试。", "Display off did not start. Display verification is incomplete or unavailable; please retry."),ToolTipIcon.Warning);
+            } else if(result==OffRequestResult.TimedOut)
+                ExplainManualOff(_text.Pick("显示核验仍在进行，请稍后再按。","Display verification is still running. Try again shortly."));
+            else if(result==OffRequestResult.Rejected)
+                ExplainManualOff(ManualOffBlockReason() ?? (_setup.IsReady
+                    ? _text.Pick("关屏暂不可用，请查看托盘状态。","Display off is temporarily unavailable. Check the tray status.")
+                    : _text.Pick("显示未就绪，请打开设置检查准备状态。","The display is not ready. Open Settings to check preparation.")));
             UpdateMenuState();
         }
         private void RefreshAutomaticTiming()
@@ -288,7 +323,7 @@ namespace ScreenOffTray
         private async Task<string> SaveWhitelistTransactionAsync(string[] paths)
         {
             if(!_playbackOptions.WhitelistKnown)return "白名单无法读取，原数据已保留，请修复后重试。 / Allowlist could not be read; existing data was preserved.";
-            if (_session.IsBusy || _setup.Preparing || _exiting || _settingsFailure != null)
+            if (!_migrationDone || _session.IsBusy || _setup.Preparing || _exiting || _settingsFailure != null)
                 return "当前无法保存，请等待显示操作完成。 / Wait for display work to finish before saving.";
             try {
                 string[] normalized = PlaybackSettingsCodec.Normalize(paths);
@@ -322,10 +357,15 @@ namespace ScreenOffTray
         private void CheckIdleState()
         {
             // Session owns recovery while preparing/off/restoring/draining.
-            if (_hotkeyEditing || _setup.Preparing || !CanPollIdle(_displayOffSupported, _session.IsBusy, _exiting)) return;
+            if (_displayRetry.Pending || SettingsOpen || _setup.Preparing || !CanPollIdle(_displayOffSupported, _session.IsBusy, _exiting)) return;
             if (!_session.CanStartSession || _settingsFailure!=null || _savingSettings) { ReleaseIdlePowerRequest(); return; }
+            uint idleMilliseconds = _session.EffectiveIdle(Math.Min(
+                _autoTimingState.IdleMilliseconds, _session.PhysicalIdleMilliseconds));
             if (!_migrationDone || !_setup.IsReady) {
                 if (!_migrationDone || !_setup.HasVerifiedProfile) ReleaseIdlePowerRequest();
+                if (_migrationDone && _setup.HasSettledResult && !_autoTimingState.Blocked &&
+                    ShouldTrigger(_paused, false, idleMilliseconds, _timeoutMinutes, false))
+                    NotifyPreparationRequired(false);
                 return;
             }
             uint physicalVersion = _session.PhysicalInputVersion;
@@ -335,13 +375,15 @@ namespace ScreenOffTray
             }
             if (_autoTimingState.Blocked) { ReleaseIdlePowerRequest(); return; }
             if (_triggeredForIdlePeriod) return;
-            uint idleMilliseconds = _session.EffectiveIdle(Math.Min(
-                _autoTimingState.IdleMilliseconds, _session.PhysicalIdleMilliseconds));
             if (!_keepAwakeRequested && ShouldPrepareKeepAwake(idleMilliseconds, _timeoutMinutes)) _keepAwakeRequested = NativeMethods.TryKeepSystemAwake();
             if (ShouldTrigger(_paused, _triggeredForIdlePeriod, idleMilliseconds, _timeoutMinutes, false) && TryStartDisplayOffSession(true)) _triggeredForIdlePeriod = true;
         }
         private bool TryStartDisplayOffSession(bool automatic)
-        { return !_exiting && !_savingSettings && !_updateApplying && _settingsFailure==null && !_hotkeyEditing && _displayOffSupported && _migrationDone && _setup.IsReady && _session.CanStartSession && _session.TryBegin(automatic); }
+        {
+            return !_exiting && !_savingSettings && !_savingWhitelist && !_updateApplying && _settingsFailure==null &&
+                (automatic ? !_paused && !SettingsOpen : !IsSettingsForeground()) && _displayOffSupported && _migrationDone &&
+                _setup.IsReady && _session.CanStartSession && _session.TryBegin(automatic);
+        }
         private void ReleaseIdlePowerRequest()
         {
             if (_session.IsBusy) return;
@@ -349,19 +391,55 @@ namespace ScreenOffTray
         }
         private void SessionChanged()
         {
+            ObserveRetryResult();
             if (!_session.IsBusy) {
                 ReleaseIdlePowerRequest(); _triggeredForIdlePeriod = false;
                 if (!_exiting && _migrationDone) { _setup.Invalidate(); _setup.Recheck(); }
             }
             UpdateMenuState();
         }
-        private void TurnOffDisplaysNow()
+        private bool IsSettingsForeground()
         {
-            if (_session.IsBusy || _exiting || _hotkeyEditing || _updateApplying) return;
-            if (!_displayOffSupported) { MessageBox.Show(LocalizeSession(_displayOffUnavailableReason), _text.Title, MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+            var host = _settingsHost;
+            return host != null && host.OwnsForeground();
+        }
+
+        private string ManualOffBlockReason()
+        {
+            if (!_displayOffSupported) return LocalizeSession(_displayOffUnavailableReason);
+            if (_session.IsBusy || !_session.CanStartSession) return LocalizeSession(_session.StateText);
+            if (_setup.Preparing) return _text.Pick("显示正在准备，请等准备结束。","Display preparation is in progress.");
+            if (_savingSettings || _savingWhitelist || _updateApplying) return _text.Pick("设置或更新正在处理，请稍后再试。","Settings or an update is being processed. Try again shortly.");
+            if (_settingsFailure != null) return _text.Pick("设置无法读取，请在设置中检查。","Settings could not be read. Open Settings to check.");
+            if (!_migrationDone) return _text.Pick("设置正在初始化，请稍后再试。","Settings are initializing. Try again shortly.");
+            if (IsSettingsForeground()) return _text.Pick("设置窗口在前台，请切回其他窗口再关屏。","Settings is in the foreground. Switch away before turning the display off.");
+            return null;
+        }
+
+        private void ExplainManualOff(string message)
+        {
+            long now = _autoClock.ElapsedMilliseconds;
+            if (_lastManualNotice == message && now - _lastManualNoticeAt < 2000) return;
+            _lastManualNotice = message;
+            _lastManualNoticeAt = now;
+            OledPrototype.Program.Log("manual_off_blocked; " + message);
+            _trayIcon.ShowBalloonTip(4000, _text.Title, message, ToolTipIcon.Warning);
+        }
+
+        private void TurnOffDisplaysNow(bool shortcutInSettings)
+        {
+            if (_exiting) return;
+            if (shortcutInSettings) {
+                if (_settingsHost == null || !_settingsHost.CaptureFocused)
+                    ExplainManualOff(_text.Pick("设置窗口在前台，请切回其他窗口再关屏。","Settings is in the foreground. Switch away before turning the display off."));
+                return;
+            }
+            string reason = ManualOffBlockReason();
+            if (reason != null) { ExplainManualOff(reason); return; }
+            if (_manualOff.Pending) return;
             _lastPhysicalInputVersion = _session.PhysicalInputVersion;
-            CompleteManualRequest(_manualOff.Begin(_migrationDone && _setup.IsReady && !_hotkeyEditing,
-                _migrationDone && _setup.Checking && !_hotkeyEditing,delegate { return TryStartDisplayOffSession(false); },_manualOff.HeldGesture()));
+            CompleteManualRequest(_manualOff.Begin(_setup.IsReady, _setup.Checking,
+                delegate { return TryStartDisplayOffSession(false); }, _manualOff.HeldGesture()));
         }
         internal static bool NeedsShortcutReservation(HotkeyBinding applied,HotkeyBinding requested,bool registered,bool hooksAvailable,bool edited)
         {return !applied.SameAs(requested) || (edited && !registered && hooksAvailable);}
@@ -487,15 +565,15 @@ namespace ScreenOffTray
                 _settingsFailure != null ? _text.Pick("设置无法读取 · 关屏已停用", "Settings unavailable · display off disabled") :
                 !_migrationDone ? _text.Pick("正在迁移设置 · 等待选择", "Migrating settings / awaiting choice") :
                 !_setup.HasVerifiedProfile ? _text.Pick("关屏未启用", "Display off disabled") :
-                _hotkeyEditing && !_paused ? _text.Pick("设置中 · 自动关屏暂缓", "Settings open · auto off paused") :
+                SettingsOpen && !_paused ? _text.Pick("设置中 · 自动关屏暂缓", "Settings open · auto off paused") :
                 AutoOffStatusText.Format(_autoTimingState, _timeoutMinutes, _text.English);
             _runtimeSnapshot=new RuntimeSnapshot(++_snapshotVersion,status,_setup.IsReady,_setup.Checking,_setup.Preparing,
                 _lastAudio,_playbackOptions,_autoTimingState,_session.PhysicalIdleMilliseconds,
                 String.Join("\r\n",new[]{_playbackWhitelistWarning,_playbackLimitWarning,((AudioMonitor)_audioMonitor).AuxiliaryWarning}).Trim());
             _view.Update(status, _paused,
-                _displayOffSupported && _migrationDone && _setup.IsReady && _session.CanStartSession && !_exiting && !_hotkeyEditing,
+                _displayOffSupported && _migrationDone && _setup.IsReady && _session.CanStartSession && !_exiting,
                 _displayOffSupported && !_setup.Preparing && !_exiting,
-                (_migrationDone || _migrationChoices!=null || _settingsFailure!=null) && !_session.IsBusy && (!_setup.Preparing || _settingsHost!=null) && !_exiting, _exiting && !_session.ExitRetryAvailable);
+                !_exiting, _exiting && !_session.ExitRetryAvailable);
             string tooltip = _text.Title + ": " + status;
             _trayIcon.Text = tooltip.Substring(0, Math.Min(63, tooltip.Length));
             PublishUiState();CheckStartupConfirmation();
@@ -514,7 +592,7 @@ namespace ScreenOffTray
             if(_updateApplying && !_updateHandedOff)return;
             if (_exiting) { _session.RetryExit(); return; }
             OledPrototype.Program.Log("tray_exit_requested; setup_preparing=" + _setup.Preparing + "; session_busy=" + _session.IsBusy);
-            _exiting = true; _manualOff.Cancel(); _timer.Stop(); CancelUpdateCheck();StopUpdateTransfer();
+            _exiting = true; _manualOff.Cancel(); _displayRetry.Cancel(); _timer.Stop(); CancelUpdateCheck();StopUpdateTransfer();
             QueueExitPromptHistory();
             // Cancellation/restoration must start before any settings IO wait.
             _session.RequestEnd(true);
@@ -550,6 +628,7 @@ namespace ScreenOffTray
                 new ExitCleanupStep("updates", delegate { _updates.Dispose(); }),
                 new ExitCleanupStep("audio_monitor", delegate { _audioMonitor.Dispose(); }),
                 new ExitCleanupStep("timer", delegate { _timer.Dispose(); }),
+                new ExitCleanupStep("display_output_notice", delegate { if (_outputNotice != null) _outputNotice.Close(); }),
                 new ExitCleanupStep("setup", delegate { _setup.Dispose(); }),
                 new ExitCleanupStep("settings_process", delegate {
                     var host=_settingsHost;_settingsHost=null;_session.SettingsKey-=ObserveSettingsKey;

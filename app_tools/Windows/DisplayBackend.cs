@@ -191,6 +191,18 @@ namespace OledPrototype
             }
         }
 
+        internal Func<bool> CreateOffObservation()
+        {
+            lock (sync)
+            {
+                Snapshot baseline = original;
+                Plan expected = prepared;
+                // The query uses the captured plan with no instance lock. A
+                // slow display driver must not delay Restore or its watchdog.
+                return delegate { return HasOriginalPhysicalOutput(baseline, expected, CaptureActive()); };
+            }
+        }
+
         public void Restore()
         {
             lock (sync)
@@ -256,6 +268,7 @@ namespace OledPrototype
             internal ModeInfo[] Modes;
             internal string DevicePath;
             internal string AdapterPath;
+            internal int OriginalPhysicalIndex;
             internal bool AllowModeChanges;
             internal string ValidationDescription;
         }
@@ -374,7 +387,7 @@ namespace OledPrototype
             mode.Adapter = replacement.Source.Adapter;
             mode.Source = source;
             return new Plan { Paths = new PathInfo[] { replacement }, Modes = new ModeInfo[] { mode },
-                DevicePath = chosen.Device.DevicePath, AdapterPath = chosen.Device.AdapterPath };
+                DevicePath = chosen.Device.DevicePath, AdapterPath = chosen.Device.AdapterPath, OriginalPhysicalIndex = physical };
         }
 
         private static void ValidatePlan(Plan plan)
@@ -393,6 +406,30 @@ namespace OledPrototype
             plan.AllowModeChanges = true;
             plan.ValidationDescription = "严格VALIDATE失败(" + Error(strict) +
                 ")；ALLOW_CHANGES校验通过，应用后必须核尺寸/位置，不符即恢复";
+        }
+
+        internal static bool HasOriginalPhysicalOutput(Snapshot baseline, Plan expected, Snapshot current)
+        {
+            ValidateArrayShapes(current);
+            if (current.Paths.Length > 2) return false;
+            int physical = expected.OriginalPhysicalIndex;
+            bool matched = false;
+            for (int i = 0; i < current.Paths.Length; i++)
+            {
+                PathInfo path = current.Paths[i];
+                if (path.Target.Available == 0) return false;
+                if (SameTarget(path, baseline.Paths[physical]) &&
+                    path.Target.Technology == baseline.Paths[physical].Target.Technology &&
+                    SameText(current.DevicePaths[i], baseline.DevicePaths[physical]) &&
+                    SameText(current.AdapterPaths[i], baseline.AdapterPaths[physical]))
+                    matched = true;
+                else if (!SameTarget(path, expected.Paths[0]) ||
+                    path.Target.Technology != expected.Paths[0].Target.Technology ||
+                    !SameText(current.DevicePaths[i], expected.DevicePath) ||
+                    !SameText(current.AdapterPaths[i], expected.AdapterPath))
+                    return false;
+            }
+            return matched;
         }
 
         internal static void VerifyOff(Plan plan, Snapshot current)

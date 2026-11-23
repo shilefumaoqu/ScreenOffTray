@@ -43,10 +43,10 @@ namespace ScreenOffTray.SettingsUi
                 if(packet.Kind=="error"){window.SetError(packet.Error);return;}
                 if(packet.Kind=="reconnected"){client.Notify(new Packet{Kind="capture",Flag=window.IsCaptureFocused});return;}
                 if(packet.Kind=="state"){
-                    bool first=state==null;
+                    bool needsValues=state==null || state.Applied==null;
                     if(packet.State==null || (state!=null && packet.State.Version<=state.Version))return;
                     state=packet.State;
-                    if(first && state.Applied!=null)ApplyValues(state.Applied);
+                    if(needsValues && state.Applied!=null)ApplyValues(state.Applied);
                     Present();AnnouncePresented();if(closing && state.CanClose){window.Close();}
                 } else if(packet.Kind=="key")window.ObserveKey(packet.Key,packet.Modifiers,packet.Up);
                 else if(packet.Kind=="activate"){if(window.WindowState==WindowState.Minimized)window.WindowState=WindowState.Normal;window.Activate();}
@@ -79,7 +79,7 @@ namespace ScreenOffTray.SettingsUi
             next.Closed+=delegate {if(window==next && !changingLanguage){client.Notify(new Packet{Kind="capture",Flag=false});window=null;application.Shutdown();}};
             next.ContentRendered+=delegate {if(window==next){rendered=true;AnnouncePresented();}};
             if(draft!=null)ApplyValues(draft);else if(state!=null && state.Applied!=null)ApplyValues(state.Applied);
-            if(state!=null)Present();else{next.SetBusy(true);next.SetStatus("正在读取设置… / Loading settings…","","","");}next.Show();if(previous!=null)previous.Close();
+            if(state!=null)Present();else{next.SetBusy(true,true);next.SetStatus("正在读取设置… / Loading settings…","","","");}next.Show();if(previous!=null)previous.Close();
         }
         private static void AnnouncePresented()
         {if(!presented && rendered && state!=null && window!=null){presented=true;client.Notify(new Packet{Kind="shown"});}}
@@ -96,7 +96,7 @@ namespace ScreenOffTray.SettingsUi
             window.SetList(state.Whitelist??new string[0]);window.SetSources(state.Sources,state.AudioKnown);window.SetUpdate(en?state.UpdateEn:state.UpdateZh,state.UpdateAvailable,state.UpdatePhase,state.UpdatePercent,state.UpdateCanDownload);
             window.SetMigrationChoices(state.MigrationChoices);window.SetListBusy(listChanging || state.SavingWhitelist);
             window.ShowSetup(state.Ready,state.Checking,state.Preparing,state.CanPrepare,en?state.DetailEn:state.DetailZh,state.Diagnostics);
-            if(disconnected)window.SetDisconnected();else window.SetBusy(saving || state.Saving);
+            if(disconnected)window.SetDisconnected();else window.SetBusy(saving || state.Saving || state.Applied==null,state.Applied==null);
         }
         private static async void ChooseMigration(int minutes)
         {

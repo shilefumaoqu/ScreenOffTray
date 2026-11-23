@@ -80,7 +80,7 @@ namespace ScreenOffTray
             if(!CaptureFocused || !OwnsForeground())return;
             Send(new Packet{Kind="key",Key=key,Modifiers=modifiers,Up=up});
         }
-        private bool OwnsForeground()
+        internal bool OwnsForeground()
         {uint pid;GetWindowThreadProcessId(GetForegroundWindow(),out pid);lock(sync)return child!=null && !childExited && pid==(uint)child.Id;}
         private void Read()
         {
